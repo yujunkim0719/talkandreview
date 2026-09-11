@@ -1,4 +1,3 @@
-HTML
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -9,54 +8,102 @@ HTML
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; }
         body { background-color: #f4f6f8; color: #333; line-height: 1.6; }
         
-        /* 헤더 & 네비게이션 */
         header { background: #2c3e50; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
         header h1 { font-size: 1.5rem; }
-        nav button { background: transparent; border: none; color: #bdc3c7; font-size: 1rem; margin-left: 15px; cursor: pointer; padding: 5px 10px; }
+        nav button { background: transparent; border: none; color: #bdc3c7; font-size: 1rem; margin-left: 10px; cursor: pointer; padding: 5px 10px; }
         nav button.active, nav button:hover { color: white; border-bottom: 2px solid #3498db; }
         
-        /* 컨테이너 */
-        .container { max-width: 900px; margin: 30px auto; padding: 0 20px; }
+        .container { max-width: 900px; margin: 30px auto; padding: 0 20px; filter: blur(5px); pointer-events: none; }
+        .container.unlocked { filter: none; pointer-events: auto; }
+        
         .tab-content { display: none; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
         .tab-content.active { display: block; }
         
-        /* 폼 스타일 */
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
         .form-group input, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; }
-        .btn { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 1rem; }
+        .btn { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 1rem; width: 100%; }
         .btn:hover { background: #2980b9; }
-        .btn-youtube { background: #ff0000; color: white; text-decoration: none; display: inline-block; padding: 10px 20px; border-radius: 6px; font-weight: bold; margin-top: 10px; }
+        .btn-admin { background: #e67e22; margin-top: 5px; }
+        .btn-youtube { background: #ff0000; color: white; text-decoration: none; display: inline-block; padding: 10px 20px; border-radius: 6px; font-weight: bold; margin-top: 10px; text-align: center; }
         
-        /* 카드 및 리스트 */
         .card { border: 1px solid #eee; padding: 15px; border-radius: 8px; margin-bottom: 15px; background: #fafafa; }
         .badge { background: #e74c3c; color: white; padding: 3px 8px; border-radius: 12px; font-size: 0.8rem; }
         .badge.approved { background: #2ecc71; }
+        
+        .comment-section { margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd; }
+        .comment-item { background: #fff; padding: 8px; border-radius: 4px; margin-top: 5px; font-size: 0.9rem; border: 1px solid #e2e2e2; }
+        .comment-input-group { display: flex; gap: 5px; margin-top: 8px; }
+        .comment-input-group input { flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+        .comment-input-group button { width: auto; padding: 6px 12px; font-size: 0.85rem; }
+
+        .profile-btn { background: #ecf0f1; border: 1px solid #bdc3c7; color: #2c3e50; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; margin-left: 5px; }
+        .profile-btn:hover { background: #bdc3c7; }
+
+        /* 모달 레이아웃 공통 */
+        .auth-overlay, .profile-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); display: flex; justify-content: center; align-items: center; z-index: 9999; }
+        .auth-modal, .profile-modal { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); text-align: center; }
+        .profile-modal h3 { margin-bottom: 15px; color: #2c3e50; }
+        .profile-info-item { text-align: left; background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 10px; font-size: 0.95rem; }
     </style>
 </head>
 <body>
 
+    <!-- 접속 즉시 뜨는 회원가입/로그인 모달 -->
+    <div id="authOverlay" class="auth-overlay">
+        <div class="auth-modal">
+            <h2>👤 회원가입 및 로그인</h2>
+            <p>이름과 생일을 입력하여 가입하세요.</p>
+            <form onsubmit="handleRegistration(event)">
+                <div class="form-group" style="text-align: left;">
+                    <label>이름 (실명)</label>
+                    <input type="text" id="regName" required placeholder="예: 홍길동">
+                </div>
+                <div class="form-group" style="text-align: left;">
+                    <label>생년월일</label>
+                    <input type="date" id="regBirth" required>
+                </div>
+                <button type="submit" class="btn">입장하기</button>
+            </form>
+            <hr style="margin: 15px 0;">
+            <button class="btn btn-admin" onclick="adminLogin()">👑 관리자 계정 로그인</button>
+        </div>
+    </div>
+
+    <!-- 친구 프로필 팝업 모달 -->
+    <div id="profileOverlay" class="profile-overlay" style="display: none;">
+        <div class="profile-modal">
+            <h3 id="profTitle">👤 프로필</h3>
+            <div class="profile-info-item">🎂 <strong>생일:</strong> <span id="profBirth">비공개</span></div>
+            <div class="profile-info-item">📧 <strong>이메일:</strong> <span id="profEmail">미등록</span></div>
+            <div class="profile-info-item" id="profYtArea">📺 <strong>유튜브:</strong> 미연동</div>
+            <button class="btn" style="margin-top: 15px; background: #7f8c8d;" onclick="closeProfile()">닫기</button>
+        </div>
+    </div>
+
     <header>
-        <h1>💬 토크앤리뷰</h1>
+        <h1>💬 토크앤리뷰 <span id="userBadge" style="font-size:0.8rem; color:#f1c40f;"></span></h1>
         <nav>
             <button class="nav-btn active" onclick="openTab('share')">재밌는거 공유</button>
             <button class="nav-btn" onclick="openTab('chat')">채팅방 목록/신청</button>
             <button class="nav-btn" onclick="openTab('contact')">관리자 문의</button>
-            <button class="nav-btn" onclick="openTab('auth')">실명 회원가입</button>
+            <button class="nav-btn" id="mypageTabBtn" style="color:#2ecc71;" onclick="openTab('mypage')">👤 마이페이지</button>
+            <button class="nav-btn admin-only" id="adminTabBtn" style="display:none; color:#f39c12;" onclick="openTab('admin')">⚙️ 관리자 제어판</button>
+            <button class="nav-btn admin-only" id="adminInquiryBtn" style="display:none; color:#e67e22;" onclick="openTab('adminInquiries')">📥 문의함 확인</button>
         </nav>
     </header>
 
-    <div class="container">
-        <!-- 1. 재밌는거 공유 탭 -->
+    <div class="container" id="mainContainer">
+        <!-- 1. 공유 탭 -->
         <div id="share" class="tab-content active">
             <h2>🎉 재밌는 콘텐츠 공유</h2>
-            <p>자유롭게 재미있는 이야기나 링크를 공유하는 공간입니다.</p>
+            <p>글을 공유하고 댓글을 통해 대화를 나누세요!</p>
             <hr style="margin: 15px 0;">
             <div class="form-group">
-                <input type="text" id="shareTitle" placeholder="제목을 입력하세요">
+                <input type="text" id="shareTitle" placeholder="제목">
             </div>
             <div class="form-group">
-                <textarea id="shareContent" rows="3" placeholder="재밌는 내용을 적어주세요!"></textarea>
+                <textarea id="shareContent" rows="3" placeholder="재밌는 내용을 적어주세요."></textarea>
             </div>
             <button class="btn" onclick="addShare()">공유하기</button>
             
@@ -68,126 +115,279 @@ HTML
             <a href="https://www.youtube.com" target="_blank" class="btn-youtube">유튜브 바로가기 ➔</a>
         </div>
 
-        <!-- 2. 채팅방 생성/승인 탭 -->
+        <!-- 2. 채팅방 탭 -->
         <div id="chat" class="tab-content">
-            <h2>💬 채팅방 신청 및 관리</h2>
-            <p>원하는 채팅방을 신청하면 관리자 승인 후 개설됩니다.</p>
-            
+            <h2>💬 개설 완료된 채팅방</h2>
+            <p>관리자 승인이 완료된 개설 방 목록입니다.</p>
+
             <div class="card" style="margin-top: 15px;">
-                <h3>채팅방 개설 신청</h3>
+                <h3>채팅방 개설 요청하기</h3>
                 <div class="form-group" style="margin-top: 10px;">
-                    <input type="text" id="roomName" placeholder="채팅방 이름">
+                    <input type="text" id="roomName" placeholder="원하는 채팅방 이름 입력">
                 </div>
-                <button class="btn" onclick="requestRoom()">관리자에게 개설 요청</button>
+                <button class="btn" onclick="requestRoom()">관리자에게 개설 신청 보내기</button>
             </div>
 
-            <h3>채팅방 목록 (관리자 승인 대기 현황)</h3>
-            <div id="roomList"></div>
+            <h3>활성화된 채팅방</h3>
+            <div id="approvedRoomList"></div>
         </div>
 
-        <!-- 3. 관리자 문의 탭 -->
+        <!-- 3. 일반 문의 탭 -->
         <div id="contact" class="tab-content">
             <h2>✉️ 관리자 문의하기</h2>
             <div class="form-group">
-                <label>이름 (실명)</label>
-                <input type="text" placeholder="홍길동">
-            </div>
-            <div class="form-group">
                 <label>문의 내용</label>
-                <textarea rows="5" placeholder="문의하실 내용을 상세히 적어주세요."></textarea>
+                <textarea id="inquiryContent" rows="5" placeholder="문의하실 내용을 적어주세요."></textarea>
             </div>
-            <button class="btn" onclick="alert('문의가 관리자에게 전달되었습니다.')">문의 보내기</button>
+            <button class="btn" onclick="submitInquiry()">문의 보내기</button>
         </div>
 
-        <!-- 4. 실명 회원가입 탭 -->
-        <div id="auth" class="tab-content">
-            <h2>👤 실명 회원가입</h2>
-            <form onsubmit="registerUser(event)">
-                <div class="form-group">
-                    <label>실명 (본인인증용)</label>
-                    <input type="text" id="realName" required placeholder="예: 홍길동">
-                </div>
-                <div class="form-group">
-                    <label>아이디</label>
-                    <input type="text" required placeholder="user123">
-                </div>
-                <div class="form-group">
-                    <label>비밀번호</label>
-                    <input type="password" required placeholder="******">
-                </div>
-                <button type="submit" class="btn">가입하기</button>
-            </form>
+        <!-- 4. 마이페이지 탭 -->
+        <div id="mypage" class="tab-content">
+            <h2>👤 마이페이지</h2>
+            <p>내 회원 정보를 확인하고 변경할 수 있습니다.</p>
+            <hr style="margin: 15px 0;">
+            
+            <div class="form-group">
+                <label>이름</label>
+                <input type="text" id="myPageName" disabled>
+            </div>
+            <div class="form-group">
+                <label>생년월일</label>
+                <input type="date" id="myPageBirth">
+            </div>
+            <div class="form-group">
+                <label>이메일 주소</label>
+                <input type="email" id="myPageEmail" placeholder="example@email.com">
+            </div>
+            <div class="form-group">
+                <label>유튜브 채널 URL</label>
+                <input type="url" id="myPageYoutube" placeholder="https://www.youtube.com/@channel">
+            </div>
+            <button class="btn" onclick="saveMyPage()">정보 수정 저장</button>
+            
+            <div id="ytLinkArea" style="margin-top: 20px;"></div>
+        </div>
+
+        <!-- 5. 관리자 전용 승인 제어판 -->
+        <div id="admin" class="tab-content">
+            <h2 style="color:#e67e22;">⚙️ 채팅방 승인 센터 (김유준 전용)</h2>
+            <p>사용자들이 요청한 채팅방 개설 건을 승인합니다.</p>
+            <hr style="margin: 15px 0;">
+            <h3>개설 승인 대기 목록</h3>
+            <div id="adminRoomList"></div>
+        </div>
+
+        <!-- 6. 관리자 전용 문의함 -->
+        <div id="adminInquiries" class="tab-content">
+            <h2 style="color:#e67e22;">📥 접수된 문의함 (김유준 전용)</h2>
+            <p>일반 회원들이 보낸 문의 내역입니다.</p>
+            <hr style="margin: 15px 0;">
+            <div id="inquiryList"></div>
         </div>
     </div>
 
     <script>
-        // 탭 전환 기능
+        let currentUser = { name: '', birth: '', email: '', youtube: '', isAdmin: false };
+        let userDatabase = {}; // 모든 유저 프로필 저장 DB
+        let rooms = [];
+        let inquiries = [];
+
+        // 로컬스토리지에서 전체 유저 DB 불러오기
+        function loadUserDB() {
+            const db = localStorage.getItem('talk_user_db');
+            if (db) userDatabase = JSON.parse(db);
+        }
+
+        function saveUserToDB(userObj) {
+            userDatabase[userObj.name] = userObj;
+            localStorage.setItem('talk_user_db', JSON.stringify(userDatabase));
+        }
+
+        window.onload = function() {
+            loadUserDB();
+            const savedUser = localStorage.getItem('talk_user');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                applyUserSession();
+            }
+        };
+
+        function handleRegistration(e) {
+            e.preventDefault();
+            const name = document.getElementById('regName').value.trim();
+            const birth = document.getElementById('regBirth').value;
+
+            if (name.includes('관리자')) {
+                alert("'관리자' 단어가 들어간 이름으로는 회원가입할 수 없습니다.");
+                return;
+            }
+
+            if (name && birth) {
+                currentUser = { name: name, birth: birth, email: '', youtube: '', isAdmin: false };
+                localStorage.setItem('talk_user', JSON.stringify(currentUser));
+                saveUserToDB(currentUser);
+                applyUserSession();
+            }
+        }
+
+        function adminLogin() {
+            const pwd = prompt("김유준(관리자) 비밀번호를 입력하세요:");
+            if (pwd === "2012526") {
+                currentUser = { name: "김유준(관리자)", birth: "2000-01-01", email: "admin@talk.com", youtube: "", isAdmin: true };
+                localStorage.setItem('talk_user', JSON.stringify(currentUser));
+                saveUserToDB(currentUser);
+                applyUserSession();
+                alert("김유준 관리자님 환영합니다!");
+            } else if (pwd !== null) {
+                alert("비밀번호가 올바르지 않습니다.");
+            }
+        }
+
+        function applyUserSession() {
+            document.getElementById('authOverlay').style.display = 'none';
+            document.getElementById('mainContainer').classList.add('unlocked');
+            
+            document.getElementById('myPageName').value = currentUser.name;
+            document.getElementById('myPageBirth').value = currentUser.birth || '';
+            document.getElementById('myPageEmail').value = currentUser.email || '';
+            document.getElementById('myPageYoutube').value = currentUser.youtube || '';
+            renderYoutubeLink();
+
+            if (currentUser.isAdmin) {
+                document.getElementById('userBadge').innerText = `(👑 ${currentUser.name})`;
+                document.getElementById('adminTabBtn').style.display = 'inline-block';
+                document.getElementById('adminInquiryBtn').style.display = 'inline-block';
+            } else {
+                document.getElementById('userBadge').innerText = `(${currentUser.name} 님)`;
+                document.getElementById('adminTabBtn').style.display = 'none';
+                document.getElementById('adminInquiryBtn').style.display = 'none';
+            }
+        }
+
+        function saveMyPage() {
+            currentUser.birth = document.getElementById('myPageBirth').value;
+            currentUser.email = document.getElementById('myPageEmail').value;
+            currentUser.youtube = document.getElementById('myPageYoutube').value;
+            
+            localStorage.setItem('talk_user', JSON.stringify(currentUser));
+            saveUserToDB(currentUser);
+            renderYoutubeLink();
+            alert("회원 정보가 성공적으로 저장되었습니다!");
+        }
+
+        function renderYoutubeLink() {
+            const ytArea = document.getElementById('ytLinkArea');
+            if (currentUser.youtube) {
+                ytArea.innerHTML = `<a href="${currentUser.youtube}" target="_blank" class="btn-youtube">내 유튜브 채널 보러가기 ➔</a>`;
+            } else {
+                ytArea.innerHTML = '';
+            }
+        }
+
+        // 프로필 팝업창 제어
+        function showProfile(username) {
+            loadUserDB();
+            const targetUser = userDatabase[username] || { name: username, birth: '정보없음', email: '정보없음', youtube: '' };
+            
+            document.getElementById('profTitle').innerText = `👤 ${targetUser.name} 님의 프로필`;
+            document.getElementById('profBirth').innerText = targetUser.birth || '미등록';
+            document.getElementById('profEmail').innerText = targetUser.email || '미등록';
+            
+            const ytArea = document.getElementById('profYtArea');
+            if (targetUser.youtube) {
+                ytArea.innerHTML = `📺 <strong>유튜브:</strong> <a href="${targetUser.youtube}" target="_blank" style="color:#ff0000; font-weight:bold;">채널 방문하기 ➔</a>`;
+            } else {
+                ytArea.innerHTML = `📺 <strong>유튜브:</strong> 미연동`;
+            }
+
+            document.getElementById('profileOverlay').style.display = 'flex';
+        }
+
+        function closeProfile() {
+            document.getElementById('profileOverlay').style.display = 'none';
+        }
+
         function openTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
-            event.target.classList.add('active');
+            if(event) event.target.classList.add('active');
         }
 
-        // 실명 가입 안내
-        function registerUser(e) {
-            e.preventDefault();
-            const name = document.getElementById('realName').value;
-            alert(`${name}님, 실명 가입이 완료되었습니다!`);
-            openTab('share');
-        }
-
-        // 재밌는거 공유 기능
+        let shareCount = 0;
         function addShare() {
             const title = document.getElementById('shareTitle').value;
             const content = document.getElementById('shareContent').value;
-            if(!title || !content) return alert('내용을 입력해주세요.');
+            if(!title || !content) return alert('내용을 입력하세요.');
             
+            shareCount++;
             const list = document.getElementById('shareList');
             const card = document.createElement('div');
             card.className = 'card';
-            card.innerHTML = `<h4>${title}</h4><p>${content}</p>`;
+            card.innerHTML = `
+                <h4>${title} 
+                    <small style="font-weight:normal; font-size:0.8rem; color:#777;">
+                        by ${currentUser.name} 
+                        <button class="profile-btn" onclick="showProfile('${currentUser.name}')">프로필</button>
+                    </small>
+                </h4>
+                <p style="margin-top:5px;">${content}</p>
+                <div class="comment-section">
+                    <strong>💬 댓글</strong>
+                    <div id="comments-${shareCount}"></div>
+                    <div class="comment-input-group">
+                        <input type="text" id="input-comment-${shareCount}" placeholder="댓글 입력...">
+                        <button class="btn" onclick="addComment(${shareCount})">등록</button>
+                    </div>
+                </div>
+            `;
             list.prepend(card);
-            
             document.getElementById('shareTitle').value = '';
             document.getElementById('shareContent').value = '';
         }
 
-        // 채팅방 개설 요청 & 관리자 승인 로직
-        let rooms = [];
+        function addComment(postId) {
+            const input = document.getElementById(`input-comment-${postId}`);
+            if(!input.value.trim()) return;
+
+            const commentArea = document.getElementById(`comments-${postId}`);
+            const item = document.createElement('div');
+            item.className = 'comment-item';
+            item.innerHTML = `
+                <strong>${currentUser.name}</strong>
+                <button class="profile-btn" onclick="showProfile('${currentUser.name}')">프로필</button>: 
+                ${input.value}
+            `;
+            commentArea.appendChild(item);
+            input.value = '';
+        }
+
         function requestRoom() {
             const roomName = document.getElementById('roomName').value;
-            if(!roomName) return alert('채팅방 이름을 입력해주세요.');
+            if(!roomName) return alert('방 이름을 입력하세요.');
             
-            const room = { id: Date.now(), name: roomName, status: '대기중' };
-            rooms.push(room);
-            renderRooms();
+            rooms.push({ id: Date.now(), name: roomName, status: '대기중', requester: currentUser.name });
+            alert('관리자에게 신청이 전달되었습니다.');
             document.getElementById('roomName').value = '';
+            renderRooms();
         }
 
         function renderRooms() {
-            const roomList = document.getElementById('roomList');
-            roomList.innerHTML = '';
-            rooms.forEach(room => {
-                const item = document.createElement('div');
-                item.className = 'card';
-                item.innerHTML = `
-                    <strong>${room.name}</strong> 
-                    <span class="badge ${room.status === '승인됨' ? 'approved' : ''}">${room.status}</span>
-                    ${room.status === '대기중' ? `<button style="margin-left:10px; cursor:pointer;" onclick="approveRoom(${room.id})">⚙️ [관리자용] 승인하기</button>` : ''}
-                `;
-                roomList.appendChild(item);
-            });
-        }
+            const approvedList = document.getElementById('approvedRoomList');
+            const adminList = document.getElementById('adminRoomList');
+            approvedList.innerHTML = '';
+            adminList.innerHTML = '';
 
-        function approveRoom(id) {
-            const room = rooms.find(r => r.id === id);
-            if(room) {
-                room.status = '승인됨';
-                alert(`'${room.name}' 채팅방 개설이 승인되었습니다!`);
-                renderRooms();
-            }
-        }
-    </script>
-</body>
-</html>
+            rooms.forEach(room => {
+                if(room.status === '승인됨') {
+                    approvedList.innerHTML += `<div class="card"><strong>🚀 ${room.name}</strong> <span class="badge approved">개설 완료</span></div>`;
+                } else {
+                    adminList.innerHTML += `
+                        <div class="card">
+                            <strong>${room.name}</strong> 
+                            (신청자: ${room.requester} <button class="profile-btn" onclick="showProfile('${room.requester}')">프로필</button>)
+                            <button class="btn btn-admin" style="width:auto; margin-left:10px; padding:5px 10px; font-size:0.8rem;" onclick="approveRoom(${room.id})">개설 허가하기</button>
+                        </div>`;
+                }
+            });
