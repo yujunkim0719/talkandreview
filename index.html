@@ -40,7 +40,6 @@
         .profile-btn { background: #ecf0f1; border: 1px solid #bdc3c7; color: #2c3e50; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; margin-left: 5px; }
         .profile-btn:hover { background: #bdc3c7; }
 
-        /* 모달 레이아웃 공통 */
         .auth-overlay, .profile-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); display: flex; justify-content: center; align-items: center; z-index: 9999; }
         .auth-modal, .profile-modal { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); text-align: center; }
         .profile-modal h3 { margin-bottom: 15px; color: #2c3e50; }
@@ -49,7 +48,7 @@
 </head>
 <body>
 
-    <!-- 접속 즉시 뜨는 회원가입/로그인 모달 -->
+    <!-- 회원가입/로그인 모달 -->
     <div id="authOverlay" class="auth-overlay">
         <div class="auth-modal">
             <h2>👤 회원가입 및 로그인</h2>
@@ -189,11 +188,10 @@
 
     <script>
         let currentUser = { name: '', birth: '', email: '', youtube: '', isAdmin: false };
-        let userDatabase = {}; // 모든 유저 프로필 저장 DB
+        let userDatabase = {};
         let rooms = [];
         let inquiries = [];
 
-        // 로컬스토리지에서 전체 유저 DB 불러오기
         function loadUserDB() {
             const db = localStorage.getItem('talk_user_db');
             if (db) userDatabase = JSON.parse(db);
@@ -285,7 +283,6 @@
             }
         }
 
-        // 프로필 팝업창 제어
         function showProfile(username) {
             loadUserDB();
             const targetUser = userDatabase[username] || { name: username, birth: '정보없음', email: '정보없음', youtube: '' };
@@ -391,3 +388,42 @@
                         </div>`;
                 }
             });
+            if(!adminList.innerHTML) adminList.innerHTML = '<p>대기 중인 신청 건이 없습니다.</p>';
+            if(!approvedList.innerHTML) approvedList.innerHTML = '<p>개설된 방이 없습니다.</p>';
+        }
+
+        function approveRoom(id) {
+            const room = rooms.find(r => r.id === id);
+            if(room) {
+                room.status = '승인됨';
+                alert(`'${room.name}' 개설을 승인했습니다.`);
+                renderRooms();
+            }
+        }
+
+        function submitInquiry() {
+            const content = document.getElementById('inquiryContent').value;
+            if(!content) return alert('내용을 입력해주세요.');
+            
+            inquiries.push({ sender: currentUser.name, content: content });
+            alert('관리자(김유준)에게 문의가 전달되었습니다.');
+            document.getElementById('inquiryContent').value = '';
+            renderInquiries();
+        }
+
+        function renderInquiries() {
+            const list = document.getElementById('inquiryList');
+            list.innerHTML = '';
+            inquiries.forEach(inq => {
+                list.innerHTML += `
+                    <div class="card">
+                        <strong>작성자: ${inq.sender}</strong> 
+                        <button class="profile-btn" onclick="showProfile('${inq.sender}')">프로필</button>
+                        <p style="margin-top:5px;">${inq.content}</p>
+                    </div>`;
+            });
+            if(!list.innerHTML) list.innerHTML = '<p>접수된 문의가 없습니다.</p>';
+        }
+    </script>
+</body>
+</html>
