@@ -137,7 +137,6 @@
 
         <nav>
             <button class="nav-btn active" onclick="openTab('shareRegister', event)">공유하기</button>
-            <!-- 2. 마이페이지 바로 왼쪽에 배치된 '공유글' 메뉴 탭 -->
             <button class="nav-btn" onclick="openTab('shareListTab', event)">공유글</button>
             <button class="nav-btn" onclick="openTab('chat', event)">채팅방</button>
             <button class="nav-btn" onclick="openTab('contact', event)">문의함</button>
@@ -161,7 +160,7 @@
             <button class="btn" onclick="addShare()">공유 등록하기</button>
         </div>
 
-        <!-- 2. 공유글 모아보기 탭 (마이페이지 바로 옆) -->
+        <!-- 2. 공유글 모아보기 탭 -->
         <div id="shareListTab" class="tab-content">
             <h2>📢 최신 공유글 모아보기</h2>
             <p>등록된 모든 공유글과 댓글을 실시간으로 확인하세요.</p>
@@ -179,7 +178,6 @@
                 <div class="form-group" style="margin-top: 10px;">
                     <input type="text" id="roomName" placeholder="원하는 채팅방 이름 입력">
                 </div>
-                <!-- 1. 문의(개설 요청) 즉시 반영 버튼 리스너 연결 -->
                 <button class="btn" onclick="requestRoom()">관리자에게 개설 신청 보내기</button>
             </div>
 
@@ -241,7 +239,6 @@
             <p>실시간 속도 제어, 터미널 모니터링, 정지 및 승인 관리 센터입니다.</p>
             <hr style="margin: 15px 0;">
 
-            <!-- 터미널 및 속도 조절 패널 -->
             <h3>💻 시스템 터미널 및 실시간 프로세스 제어</h3>
             <div class="card" style="background: #1e272e; color: white;">
                 <p style="font-size:0.9rem; margin-bottom: 10px;">고속 연산 및 시스템 모니터링 터미널</p>
@@ -254,7 +251,6 @@
 
             <hr style="margin: 20px 0;">
 
-            <!-- 전체 공지 등록 -->
             <h3>📢 전체 공지사항 등록/수정</h3>
             <div class="card" style="background:#fffde7; border: 1px solid #ffe082; margin-top:10px;">
                 <div class="form-group">
@@ -282,13 +278,11 @@
             </div>
 
             <hr style="margin: 20px 0;">
-            <!-- 3. 정지 대상자 입력 버그 완벽 해결 구간 -->
             <h3>3. 🛑 사용자 제재 및 정지 관리</h3>
             <div class="card" style="background: #fff5f5; border: 1px solid #feb2b2; margin-top:10px;">
                 <div class="form-group">
                     <label>정지 대상자 이름 입력</label>
                     <div style="display:flex; gap:5px; position:relative;">
-                        <!-- 한글 입력 버그 및 포커스 꼬임 방지 이벤트 분기 처리 -->
                         <input type="text" id="banTargetSearchInput" placeholder="이름을 직접 입력하거나 검색하세요" oninput="filterBanTargets()" autocomplete="off">
                         <div id="banDropdown" class="search-results-dropdown"></div>
                     </div>
@@ -354,11 +348,6 @@
 
         window.onload = function() {
             listenRealtimeData();
-            const savedUser = localStorage.getItem('talk_user');
-            if (savedUser) {
-                currentUser = JSON.parse(savedUser);
-                applyUserSession();
-            }
         };
 
         function toggleSection(sectionId) {
@@ -368,13 +357,22 @@
             target.style.display = (currentDisplay === 'none') ? 'block' : 'none';
         }
 
-        // 실시간 데이터 동기화 리스너
         function listenRealtimeData() {
             db.ref('users').on('value', snapshot => {
                 userDatabase = snapshot.val() || {};
                 if(!userDatabase["김유준(관리자)"]) {
                     userDatabase["김유준(관리자)"] = { name: "김유준(관리자)", birth: "2000-01-01", email: "admin@talk.com", photo: "https://via.placeholder.com/90", isAdmin: true };
                     db.ref('users/김유준(관리자)').set(userDatabase["김유준(관리자)"]);
+                }
+
+                // 자동 로그인 세션 검증 (데이터가 로드된 직후 최초 1회 실행)
+                const savedUser = localStorage.getItem('talk_user');
+                if (savedUser && !currentUser.name) {
+                    const parsed = JSON.parse(savedUser);
+                    if (userDatabase[parsed.name]) {
+                        currentUser = userDatabase[parsed.name]; // 최신 DB 정보 동기화
+                        applyUserSession();
+                    }
                 }
             });
 
@@ -384,7 +382,6 @@
                 if(currentUser.isAdmin) renderAdminPanel();
             });
 
-            // 1. 방 개설 요청 데이터 누락 없이 실시간 즉시 수신 반영
             db.ref('rooms').on('value', snapshot => {
                 const data = snapshot.val() || {};
                 rooms = Object.keys(data).map(key => data[key]);
@@ -471,7 +468,14 @@
 
             if (checkBanStatus(name)) return;
 
-            currentUser = { name: name, birth: birth, email: '', youtube: '', bestFriends: [], photo: 'https://via.placeholder.com/90', isAdmin: false };
+            // 이미 존재하는 유저라면 기존 정보 유지, 없으면 새로 생성
+            if (userDatabase[name]) {
+                currentUser = userDatabase[name];
+                currentUser.birth = birth; // 생일 정보 업데이트 가능
+            } else {
+                currentUser = { name: name, birth: birth, email: '', youtube: '', bestFriends: [], photo: 'https://via.placeholder.com/90', isAdmin: false };
+            }
+
             db.ref('users/' + name).set(currentUser);
             localStorage.setItem('talk_user', JSON.stringify(currentUser));
             applyUserSession();
@@ -541,7 +545,8 @@
         }
 
         function searchFriend() {
-            const inputName = document.getElementById('searchFriendName').value.trim();
+            const inputField = document.getElementById('searchFriendName');
+            const inputName = inputField.value.trim().toLowerCase();
             const dropdown = document.getElementById('searchResultsDropdown');
 
             if(!inputName) {
@@ -549,15 +554,20 @@
                 return;
             }
 
-            const matches = Object.keys(userDatabase).filter(u => u.includes(inputName));
+            const allUsers = Object.keys(userDatabase);
+            const matches = allUsers.filter(u => u.toLowerCase().includes(inputName));
 
             if(matches.length > 0) {
-                dropdown.innerHTML = matches.map(u => `
-                    <div class="search-result-item" onclick="selectSearchResult('${u}')">
-                        <span><img src="${userDatabase[u].photo || 'https://via.placeholder.com/30'}" class="profile-img-sm"> <strong>${u}</strong></span>
-                        <button class="profile-btn">프로필 보기</button>
-                    </div>
-                `).join('');
+                dropdown.innerHTML = matches.map(u => {
+                    const userData = userDatabase[u] || {};
+                    const photo = userData.photo || 'https://via.placeholder.com/30';
+                    return `
+                        <div class="search-result-item" onclick="selectSearchResult('${u}')">
+                            <span><img src="${photo}" class="profile-img-sm"> <strong>${u}</strong></span>
+                            <button class="profile-btn">프로필 보기</button>
+                        </div>
+                    `;
+                }).join('');
                 dropdown.style.display = 'block';
             } else {
                 dropdown.innerHTML = '<div style="padding:10px; color:#777;">검색 결과가 없습니다.</div>';
@@ -571,15 +581,15 @@
             showProfile(username);
         }
 
-        // 3. 정지 대상자 이름 입력 버그(안 써지던 현상) 완전 해결 함수
         function filterBanTargets() {
             const inputField = document.getElementById('banTargetSearchInput');
-            const inputName = inputField.value.trim();
+            const inputName = inputField.value.trim().toLowerCase();
             const dropdown = document.getElementById('banDropdown');
             const resultArea = document.getElementById('banTargetSearchResult');
 
-            if (inputName) {
-                resultArea.innerHTML = `✅ [${inputName}] 회원이 지정되었습니다.`;
+            const rawInput = inputField.value.trim();
+            if (rawInput) {
+                resultArea.innerHTML = `✅ [${rawInput}] 회원이 지정되었습니다.`;
             } else {
                 resultArea.innerHTML = '';
             }
@@ -589,15 +599,20 @@
                 return;
             }
 
-            const matches = Object.keys(userDatabase).filter(u => u.includes(inputName));
+            const allUsers = Object.keys(userDatabase);
+            const matches = allUsers.filter(u => u.toLowerCase().includes(inputName));
 
             if (matches.length > 0) {
-                dropdown.innerHTML = matches.map(u => `
-                    <div class="search-result-item" onclick="selectBanTargetFromDropdown('${u}')">
-                        <span><img src="${userDatabase[u].photo || 'https://via.placeholder.com/30'}" class="profile-img-sm"> <strong>${u}</strong></span>
-                        <span style="font-size:0.8rem; color:#27ae60;">선택하기</span>
-                    </div>
-                `).join('');
+                dropdown.innerHTML = matches.map(u => {
+                    const userData = userDatabase[u] || {};
+                    const photo = userData.photo || 'https://via.placeholder.com/30';
+                    return `
+                        <div class="search-result-item" onclick="selectBanTargetFromDropdown('${u}')">
+                            <span><img src="${photo}" class="profile-img-sm"> <strong>${u}</strong></span>
+                            <span style="font-size:0.8rem; color:#27ae60;">선택하기</span>
+                        </div>
+                    `;
+                }).join('');
                 dropdown.style.display = 'block';
             } else {
                 dropdown.innerHTML = '<div style="padding:10px; color:#777; font-size:0.85rem;">직접 입력한 이름으로 정지 적용됩니다.</div>';
@@ -702,7 +717,6 @@
             document.getElementById('shareContent').value = '';
             alert('공유글이 등록되었습니다!');
             
-            // 공유글 등록 직후 '공유글' 탭으로 자동 이동
             openTab('shareListTab', null);
             document.querySelectorAll('.nav-btn').forEach(btn => {
                 if(btn.innerText.includes('공유글')) btn.classList.add('active');
@@ -751,7 +765,6 @@
             }
         }
 
-        // 1. 방 개설 요청(문의) 즉시 반영 함수
         function requestRoom() {
             const roomName = document.getElementById('roomName').value.trim();
             if(!roomName) return alert('방 이름을 입력하세요.');
@@ -810,7 +823,6 @@
             }
         }
 
-        // 터미널 고속 실행 및 확실한 정지 기능
         async function startFastProcess() {
             if(isTaskRunning) return alert('이미 작업이 실행 중입니다.');
             isTaskRunning = true;
