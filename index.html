@@ -11,10 +11,14 @@
         header { background: #2c3e50; color: white; padding: 1rem 2rem; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
         header h1 { font-size: 1.5rem; }
         
-        .search-bar { display: flex; gap: 5px; background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 20px; }
+        .search-bar { display: flex; gap: 5px; background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 20px; position: relative; }
         .search-bar input { border: none; background: transparent; color: white; outline: none; padding: 4px 8px; font-size: 0.9rem; }
         .search-bar input::placeholder { color: #bdc3c7; }
         .search-bar button { background: #3498db; border: none; color: white; padding: 4px 12px; border-radius: 12px; cursor: pointer; font-size: 0.85rem; }
+
+        .search-results-dropdown { position: absolute; top: 40px; left: 0; width: 100%; background: white; color: #333; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); max-height: 200px; overflow-y: auto; z-index: 1000; display: none; }
+        .search-result-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .search-result-item:hover { background: #f1f2f6; }
 
         nav button { background: transparent; border: none; color: #bdc3c7; font-size: 0.95rem; margin-left: 5px; cursor: pointer; padding: 5px 10px; }
         nav button.active, nav button:hover { color: white; border-bottom: 2px solid #3498db; }
@@ -100,10 +104,11 @@
     <header>
         <h1>💬 토크앤리뷰 <span id="userBadge" style="font-size:0.8rem; color:#f1c40f;"></span></h1>
         
-        <!-- 친구 검색창 -->
+        <!-- 친구 검색창 (중복 검색어 모달 드롭다운 지원) -->
         <div class="search-bar">
-            <input type="text" id="searchFriendName" placeholder="친구 이름 검색...">
+            <input type="text" id="searchFriendName" placeholder="친구 이름 검색..." onkeyup="searchFriend()">
             <button onclick="searchFriend()">검색</button>
+            <div id="searchResultsDropdown" class="search-results-dropdown"></div>
         </div>
 
         <nav>
@@ -206,7 +211,7 @@
             <div id="adminRoomList"></div>
 
             <hr style="margin: 20px 0;">
-            <h3>2. 🕵️ 전체 채팅 및 대화 모니터링 (뒷담화 감시)</h3>
+            <h3>2. 🕵️ 전체 채팅 및 대화 모니터링 (강제 강퇴/삭제 기능 포함)</h3>
             <div id="adminChatMonitorArea"></div>
 
             <hr style="margin: 20px 0;">
@@ -245,12 +250,11 @@
     <script>
         let currentUser = { name: '', birth: '', email: '', youtube: '', bestFriends: [], isAdmin: false };
         let userDatabase = {};
-        let bannedDatabase = {}; // 정지 데이터 { username: { banUntil: timestamp, durationText: '', reason: '', deviceId: '' } }
+        let bannedDatabase = {}; 
         let rooms = [];
         let inquiries = [];
         let selectedProfileUser = '';
 
-        // 기기 식별용 ID 생성 및 로드
         let currentDeviceId = localStorage.getItem('talk_device_id');
         if (!currentDeviceId) {
             currentDeviceId = 'DEV_' + Math.random().toString(36).substr(2, 9);
@@ -280,6 +284,13 @@
 
         window.onload = function() {
             loadData();
+            
+            // 기본 관리자 계정이 DB에 없으면 추가
+            if (!userDatabase["김유준(관리자)"]) {
+                userDatabase["김유준(관리자)"] = { name: "김유준(관리자)", birth: "2000-01-01", email: "admin@talk.com", youtube: "", bestFriends: [], isAdmin: true };
+                saveData();
+            }
+
             const savedUser = localStorage.getItem('talk_user');
             if (savedUser) {
                 const userObj = JSON.parse(savedUser);
@@ -290,10 +301,7 @@
         };
 
         function checkBanStatus(username) {
-            // 1. 사용자명 또는 기기 차단 여부 체크
             let banInfo = bannedDatabase[username];
-            
-            // 기기 아이디로 차단된 계정 탐색
             if (!banInfo) {
                 for (let u in bannedDatabase) {
                     if (bannedDatabase[u].deviceId === currentDeviceId) {
@@ -307,13 +315,12 @@
                 const now = new Date().getTime();
                 if (banInfo.banUntil > now) {
                     const daysText = banInfo.durationText;
-                    alert(`🚨 ${username}님! [${daysText}] 정지 되셨습니다.\n\n사유: ${banInfo.reason}\n(정지 기간 동안은 해당 기기에서 접속 및 신규 회원가입이 불가능합니다.)`);
+                    alert(`🚨 ${username}님! [${daysText}] 정지 되셨습니다.\n\n사유: ${banInfo.reason}`);
                     localStorage.removeItem('talk_user');
                     document.getElementById('authOverlay').style.display = 'flex';
                     document.getElementById('mainContainer').classList.remove('unlocked');
                     return true;
                 } else {
-                    // 정지 기간 경과 시 해제
                     delete bannedDatabase[username];
                     saveData();
                 }
@@ -326,7 +333,6 @@
             const name = document.getElementById('regName').value.trim();
             const birth = document.getElementById('regBirth').value;
 
-            // 정지된 기기인지 확인
             for (let u in bannedDatabase) {
                 if (bannedDatabase[u].deviceId === currentDeviceId && bannedDatabase[u].banUntil > new Date().getTime()) {
                     alert(`🚨 해당 기기는 정지 상태이므로 신규 가입이 불가능합니다.\n사유: ${bannedDatabase[u].reason}`);
@@ -407,14 +413,37 @@
             }
         }
 
+        // 검색창 중복 지원 및 관리자 검색 포함
         function searchFriend() {
-            const name = document.getElementById('searchFriendName').value.trim();
-            if(!name) return alert('검색할 이름을 입력하세요.');
-            if(userDatabase[name]) {
-                showProfile(name);
-            } else {
-                alert(`'${name}' 님을 찾을 수 없습니다.`);
+            loadData();
+            const inputName = document.getElementById('searchFriendName').value.trim();
+            const dropdown = document.getElementById('searchResultsDropdown');
+
+            if(!inputName) {
+                dropdown.style.display = 'none';
+                return;
             }
+
+            const matches = Object.keys(userDatabase).filter(u => u.includes(inputName));
+
+            if(matches.length > 0) {
+                dropdown.innerHTML = matches.map(u => `
+                    <div class="search-result-item" onclick="selectSearchResult('${u}')">
+                        <span><strong>${u}</strong></span>
+                        <button class="profile-btn">프로필 보기</button>
+                    </div>
+                `).join('');
+                dropdown.style.display = 'block';
+            } else {
+                dropdown.innerHTML = '<div style="padding:10px; color:#777;">검색 결과가 없습니다.</div>';
+                dropdown.style.display = 'block';
+            }
+        }
+
+        function selectSearchResult(username) {
+            document.getElementById('searchResultsDropdown').style.display = 'none';
+            document.getElementById('searchFriendName').value = username;
+            showProfile(username);
         }
 
         function showProfile(username) {
@@ -475,6 +504,7 @@
             alert(`관리자(김유준)에게 ${selectedProfileUser}님과의 1:1 대화 개설 요청을 보냈습니다.`);
             closeProfile();
             renderRooms();
+            if(currentUser.isAdmin) renderAdminPanel();
         }
 
         function renderBestFriendsList() {
@@ -554,6 +584,7 @@
             alert('관리자에게 신청이 전달되었습니다.');
             document.getElementById('roomName').value = '';
             renderRooms();
+            if(currentUser.isAdmin) renderAdminPanel();
         }
 
         function renderRooms() {
@@ -563,7 +594,6 @@
 
             rooms.forEach(room => {
                 if(room.status === '승인됨') {
-                    // 1:1 대화방일 경우 자신이 멤버이거나 관리자인 경우만 표시
                     if(room.type === 'private' && !room.members.includes(currentUser.name) && !currentUser.isAdmin) {
                         return;
                     }
@@ -601,6 +631,7 @@
         // --- 관리자 전용 기능 ---
         function renderAdminPanel() {
             if(!currentUser.isAdmin) return;
+            loadData();
 
             // 1. 승인 대기 목록
             const adminList = document.getElementById('adminRoomList');
@@ -615,20 +646,24 @@
                         </div>`;
                 }
             });
-            if(!adminList.innerHTML) adminList.innerHTML = '<p>대기 중인 개설 신청이 없습니다.</p>';
+            if(!adminList.innerHTML) adminList.innerHTML = '<p style="color:#777;">대기 중인 개설 신청이 없습니다.</p>';
 
-            // 2. 채팅 모니터링 (뒷담 감시)
+            // 2. 실시간 대화 모니터링 및 방 폐쇄/삭제
             const monitorArea = document.getElementById('adminChatMonitorArea');
             monitorArea.innerHTML = '';
             rooms.forEach(room => {
                 monitorArea.innerHTML += `
                     <div class="card" style="background:#f8f9fa;">
-                        <strong>📌 ${room.name} (${room.status})</strong>
-                        <div class="chat-box" style="height:100px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <strong>📌 ${room.name} (${room.status})</strong>
+                            <button class="btn btn-ban" style="width:auto; padding:3px 8px; font-size:0.75rem;" onclick="deleteRoomByAdmin(${room.id})">대화방 강제 삭제</button>
+                        </div>
+                        <div class="chat-box" style="height:120px;">
                             ${room.messages.length > 0 ? room.messages.map(m => `<div><strong>${m.sender}:</strong> ${m.text}</div>`).join('') : '<span style="color:#777;">대화 내역 없음</span>'}
                         </div>
                     </div>`;
             });
+            if(!monitorArea.innerHTML) monitorArea.innerHTML = '<p style="color:#777;">생성된 대화방이 없습니다.</p>';
 
             // 3. 정지 대상 유저 드롭다운
             const banSelect = document.getElementById('banTargetUserSelect');
@@ -653,8 +688,18 @@
             }
             if(!bannedArea.innerHTML) bannedArea.innerHTML = '<p style="color:#777;">현재 정지된 회원이 없습니다.</p>';
 
-            // 5. 문의함
+            // 5. 문의함 출력
             renderInquiries();
+        }
+
+        function deleteRoomByAdmin(roomId) {
+            if(confirm("이 대화방을 강제로 삭제하시겠습니까?")) {
+                rooms = rooms.filter(r => r.id !== roomId);
+                saveData();
+                renderRooms();
+                renderAdminPanel();
+                alert("대화방이 삭제되었습니다.");
+            }
         }
 
         function approveRoom(id) {
@@ -679,7 +724,6 @@
             const banUntil = now + (durationDays * 24 * 60 * 60 * 1000);
             const durationText = durationDays >= 99999 ? '영구' : `${durationDays}일`;
 
-            // 해당 회원의 deviceId 찾기 (없으면 현재 가입된 상태 참조)
             bannedDatabase[target] = {
                 banUntil: banUntil,
                 durationText: durationText,
@@ -723,7 +767,7 @@
                         <p style="margin-top:5px;">${inq.content}</p>
                     </div>`;
             });
-            if(!list.innerHTML) list.innerHTML = '<p>접수된 문의가 없습니다.</p>';
+            if(!list.innerHTML) list.innerHTML = '<p style="color:#777;">접수된 문의가 없습니다.</p>';
         }
     </script>
 </body>
