@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>토크앤리뷰 - Talk & Review</title>
+    <!-- Firebase SDK 로드 -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; }
         body { background-color: #f4f6f8; color: #333; line-height: 1.6; }
@@ -36,8 +39,8 @@
         .btn:hover { background: #2980b9; }
         .btn-admin { background: #e67e22; margin-top: 5px; }
         .btn-ban { background: #e74c3c; color: white; }
-        .btn-youtube { background: #ff0000; color: white; text-decoration: none; display: inline-block; padding: 10px 20px; border-radius: 6px; font-weight: bold; margin-top: 10px; text-align: center; }
-        .btn-friend { background: #2ecc71; color: white; margin-top: 5px; }
+        .btn-logout { background: #7f8c8d; color: white; margin-top: 15px; }
+        .btn-toggle { background: #34495e; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; margin-left: 10px; }
         
         .card { border: 1px solid #eee; padding: 15px; border-radius: 8px; margin-bottom: 15px; background: #fafafa; }
         .badge { background: #e74c3c; color: white; padding: 3px 8px; border-radius: 12px; font-size: 0.8rem; }
@@ -49,16 +52,17 @@
         .comment-input-group input { flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
         .comment-input-group button { width: auto; padding: 6px 12px; font-size: 0.85rem; }
 
+        .profile-img-sm { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; vertical-align: middle; margin-right: 5px; }
+        .profile-img-lg { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; border: 2px solid #3498db; }
         .profile-btn { background: #ecf0f1; border: 1px solid #bdc3c7; color: #2c3e50; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; margin-left: 5px; }
-        .profile-btn:hover { background: #bdc3c7; }
 
         .auth-overlay, .profile-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); display: flex; justify-content: center; align-items: center; z-index: 9999; }
         .auth-modal, .profile-modal { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 450px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); text-align: center; }
-        .profile-modal h3 { margin-bottom: 15px; color: #2c3e50; }
         .profile-info-item { text-align: left; background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 10px; font-size: 0.95rem; }
 
         .friend-chip { display: inline-block; background: #e8f8f5; border: 1px solid #2ecc71; color: #27ae60; padding: 5px 12px; border-radius: 20px; margin: 3px; font-weight: bold; }
         .chat-box { background: #1e272e; color: #f5f6fa; padding: 10px; border-radius: 6px; max-height: 150px; overflow-y: auto; font-size: 0.85rem; margin-top: 8px; }
+        .collapsible-content { display: none; margin-top: 15px; }
     </style>
 </head>
 <body>
@@ -84,17 +88,18 @@
         </div>
     </div>
 
-    <!-- 친구 프로필 팝업 모달 -->
+    <!-- 프로필 팝업 모달 -->
     <div id="profileOverlay" class="profile-overlay" style="display: none;">
         <div class="profile-modal">
+            <img id="profImg" src="https://via.placeholder.com/90" class="profile-img-lg" alt="프로필 사진">
             <h3 id="profTitle">👤 프로필</h3>
             <div class="profile-info-item">🎂 <strong>생일:</strong> <span id="profBirth">비공개</span></div>
             <div class="profile-info-item">📧 <strong>이메일:</strong> <span id="profEmail">미등록</span></div>
             <div class="profile-info-item" id="profYtArea">📺 <strong>유튜브:</strong> 미연동</div>
             
             <div id="profActionArea" style="margin-top: 15px;">
-                <button class="btn btn-friend" id="btnAddBestFriend" onclick="addBestFriendAction()">⭐ 찐친 맺기</button>
-                <button class="btn" id="btnReqPrivateChat" style="margin-top: 5px; background: #9b59b6;" onclick="requestPrivateChatAction()">💬 1:1 대화 요청하기 (관리자 승인 필요)</button>
+                <button class="btn" style="background:#2ecc71;" id="btnAddBestFriend" onclick="addBestFriendAction()">⭐ 찐친 맺기</button>
+                <button class="btn" id="btnReqPrivateChat" style="margin-top: 5px; background: #9b59b6;" onclick="requestPrivateChatAction()">💬 1:1 대화 요청하기</button>
             </div>
             
             <button class="btn" style="margin-top: 15px; background: #7f8c8d;" onclick="closeProfile()">닫기</button>
@@ -104,7 +109,6 @@
     <header>
         <h1>💬 토크앤리뷰 <span id="userBadge" style="font-size:0.8rem; color:#f1c40f;"></span></h1>
         
-        <!-- 친구 검색창 (중복 검색어 모달 드롭다운 지원) -->
         <div class="search-bar">
             <input type="text" id="searchFriendName" placeholder="친구 이름 검색..." onkeyup="searchFriend()">
             <button onclick="searchFriend()">검색</button>
@@ -136,10 +140,6 @@
             
             <h3 style="margin-top: 30px;">최신 공유글</h3>
             <div id="shareList"></div>
-            
-            <hr style="margin: 20px 0;">
-            <h3>📺 공식 유튜브 채널</h3>
-            <a href="https://www.youtube.com" target="_blank" class="btn-youtube">유튜브 바로가기 ➔</a>
         </div>
 
         <!-- 2. 채팅방 탭 -->
@@ -175,6 +175,11 @@
             <p>내 회원 정보를 확인하고 변경할 수 있습니다.</p>
             <hr style="margin: 15px 0;">
             
+            <div style="text-align: center; margin-bottom: 15px;">
+                <img id="myPagePreviewImg" src="https://via.placeholder.com/90" class="profile-img-lg" alt="내 프로필 사진"><br>
+                <input type="file" id="profileImgInput" accept="image/*" onchange="uploadProfileImg(event)">
+            </div>
+
             <div class="form-group">
                 <label>이름</label>
                 <input type="text" id="myPageName" disabled>
@@ -192,27 +197,38 @@
                 <input type="url" id="myPageYoutube" placeholder="https://www.youtube.com/@channel">
             </div>
             <button class="btn" onclick="saveMyPage()">정보 수정 저장</button>
-            <div id="ytLinkArea" style="margin-top: 15px;"></div>
 
             <hr style="margin: 25px 0;">
             <h3>⭐ 나의 찐친 목록</h3>
             <div id="bestFriendListArea" style="margin-top: 10px;">
                 <p style="color:#777; font-size:0.9rem;">아직 찐친이 없습니다.</p>
             </div>
+
+            <button class="btn btn-logout" onclick="logout()">🚪 로그아웃</button>
         </div>
 
-        <!-- 5. 관리자 전용 제어판 -->
+        <!-- 5. 관리자 제어판 -->
         <div id="admin" class="tab-content">
             <h2 style="color:#e67e22;">⚙️ 관리자 종합 제어 센터 (김유준 전용)</h2>
-            <p>개설 신청 승인, 대화 감시, 이용자 정지 및 제재를 관리합니다.</p>
+            <p>개설 신청 승인, 실시간 감시, 정지 처리 및 문의 내역을 관리합니다.</p>
             <hr style="margin: 15px 0;">
             
-            <h3>1. 단체/1:1 채팅방 승인 대기 목록</h3>
-            <div id="adminRoomList"></div>
+            <h3>
+                1. 승인 대기 목록
+                <button class="btn-toggle" onclick="toggleSection('adminRoomListSection')">열기 / 접기</button>
+            </h3>
+            <div id="adminRoomListSection" class="collapsible-content">
+                <div id="adminRoomList"></div>
+            </div>
 
             <hr style="margin: 20px 0;">
-            <h3>2. 🕵️ 전체 채팅 및 대화 모니터링 (강제 강퇴/삭제 기능 포함)</h3>
-            <div id="adminChatMonitorArea"></div>
+            <h3>
+                2. 🕵️ 전체 채팅 및 대화 모니터링
+                <button class="btn-toggle" onclick="toggleSection('adminChatMonitorSection')">열기 / 접기</button>
+            </h3>
+            <div id="adminChatMonitorSection" class="collapsible-content">
+                <div id="adminChatMonitorArea"></div>
+            </div>
 
             <hr style="margin: 20px 0;">
             <h3>3. 🛑 사용자 제재 및 정지/영구정지 관리</h3>
@@ -242,17 +258,32 @@
             <div id="bannedUserListArea"></div>
 
             <hr style="margin: 20px 0;">
-            <h3>4. 📥 접수된 문의함</h3>
-            <div id="inquiryList"></div>
+            <h3>
+                4. 📥 접수된 문의함
+                <button class="btn-toggle" onclick="toggleSection('inquiryListSection')">열기 / 접기</button>
+            </h3>
+            <div id="inquiryListSection" class="collapsible-content">
+                <div id="inquiryList"></div>
+            </div>
         </div>
     </div>
 
     <script>
-        let currentUser = { name: '', birth: '', email: '', youtube: '', bestFriends: [], isAdmin: false };
+        // Firebase 데모용 실시간 연결 데이터베이스 설정
+        const firebaseConfig = {
+            databaseURL: "https://talk-and-review-default-rtdb.firebaseio.com/"
+        };
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.database();
+
+        let currentUser = { name: '', birth: '', email: '', youtube: '', bestFriends: [], photo: '', isAdmin: false };
         let userDatabase = {};
         let bannedDatabase = {}; 
         let rooms = [];
         let inquiries = [];
+        let shares = [];
         let selectedProfileUser = '';
 
         let currentDeviceId = localStorage.getItem('talk_device_id');
@@ -261,44 +292,50 @@
             localStorage.setItem('talk_device_id', currentDeviceId);
         }
 
-        function loadData() {
-            const db = localStorage.getItem('talk_user_db');
-            if (db) userDatabase = JSON.parse(db);
-
-            const bdb = localStorage.getItem('talk_banned_db');
-            if (bdb) bannedDatabase = JSON.parse(bdb);
-
-            const rms = localStorage.getItem('talk_rooms_db');
-            if (rms) rooms = JSON.parse(rms);
-
-            const inqs = localStorage.getItem('talk_inquiries_db');
-            if (inqs) inquiries = JSON.parse(inqs);
-        }
-
-        function saveData() {
-            localStorage.setItem('talk_user_db', JSON.stringify(userDatabase));
-            localStorage.setItem('talk_banned_db', JSON.stringify(bannedDatabase));
-            localStorage.setItem('talk_rooms_db', JSON.stringify(rooms));
-            localStorage.setItem('talk_inquiries_db', JSON.stringify(inquiries));
-        }
-
         window.onload = function() {
-            loadData();
-            
-            // 기본 관리자 계정이 DB에 없으면 추가
-            if (!userDatabase["김유준(관리자)"]) {
-                userDatabase["김유준(관리자)"] = { name: "김유준(관리자)", birth: "2000-01-01", email: "admin@talk.com", youtube: "", bestFriends: [], isAdmin: true };
-                saveData();
-            }
-
+            listenRealtimeData();
             const savedUser = localStorage.getItem('talk_user');
             if (savedUser) {
-                const userObj = JSON.parse(savedUser);
-                if (checkBanStatus(userObj.name)) return;
-                currentUser = userObj;
+                currentUser = JSON.parse(savedUser);
                 applyUserSession();
             }
         };
+
+        // Firebase 실시간 통합 데이터 수신
+        function listenRealtimeData() {
+            db.ref('users').on('value', snapshot => {
+                userDatabase = snapshot.val() || {};
+                if(!userDatabase["김유준(관리자)"]) {
+                    userDatabase["김유준(관리자)"] = { name: "김유준(관리자)", birth: "2000-01-01", email: "admin@talk.com", photo: "https://via.placeholder.com/90", isAdmin: true };
+                    db.ref('users/김유준(관리자)').set(userDatabase["김유준(관리자)"]);
+                }
+            });
+
+            db.ref('banned').on('value', snapshot => {
+                bannedDatabase = snapshot.val() || {};
+                if(currentUser.name && checkBanStatus(currentUser.name)) return;
+                if(currentUser.isAdmin) renderAdminPanel();
+            });
+
+            db.ref('rooms').on('value', snapshot => {
+                const data = snapshot.val() || {};
+                rooms = Object.keys(data).map(key => data[key]);
+                renderRooms();
+                if(currentUser.isAdmin) renderAdminPanel();
+            });
+
+            db.ref('inquiries').on('value', snapshot => {
+                const data = snapshot.val() || {};
+                inquiries = Object.keys(data).map(key => data[key]);
+                if(currentUser.isAdmin) renderInquiries();
+            });
+
+            db.ref('shares').on('value', snapshot => {
+                const data = snapshot.val() || {};
+                shares = Object.keys(data).map(key => data[key]);
+                renderShares();
+            });
+        }
 
         function checkBanStatus(username) {
             let banInfo = bannedDatabase[username];
@@ -314,15 +351,11 @@
             if (banInfo) {
                 const now = new Date().getTime();
                 if (banInfo.banUntil > now) {
-                    const daysText = banInfo.durationText;
-                    alert(`🚨 ${username}님! [${daysText}] 정지 되셨습니다.\n\n사유: ${banInfo.reason}`);
-                    localStorage.removeItem('talk_user');
-                    document.getElementById('authOverlay').style.display = 'flex';
-                    document.getElementById('mainContainer').classList.remove('unlocked');
+                    alert(`🚨 ${username}님! [${banInfo.durationText}] 정지 되셨습니다.\n\n사유: ${banInfo.reason}`);
+                    logout();
                     return true;
                 } else {
-                    delete bannedDatabase[username];
-                    saveData();
+                    db.ref('banned/' + username).remove();
                 }
             }
             return false;
@@ -333,36 +366,24 @@
             const name = document.getElementById('regName').value.trim();
             const birth = document.getElementById('regBirth').value;
 
-            for (let u in bannedDatabase) {
-                if (bannedDatabase[u].deviceId === currentDeviceId && bannedDatabase[u].banUntil > new Date().getTime()) {
-                    alert(`🚨 해당 기기는 정지 상태이므로 신규 가입이 불가능합니다.\n사유: ${bannedDatabase[u].reason}`);
-                    return;
-                }
-            }
-
             if (name.includes('관리자')) {
-                alert("'관리자' 단어가 들어간 이름으로는 가입할 수 없습니다.");
-                return;
+                return alert("'관리자' 단어가 들어간 이름으로는 가입할 수 없습니다.");
             }
 
             if (checkBanStatus(name)) return;
 
-            if (name && birth) {
-                currentUser = { name: name, birth: birth, email: '', youtube: '', bestFriends: [], isAdmin: false };
-                userDatabase[name] = currentUser;
-                localStorage.setItem('talk_user', JSON.stringify(currentUser));
-                saveData();
-                applyUserSession();
-            }
+            currentUser = { name: name, birth: birth, email: '', youtube: '', bestFriends: [], photo: 'https://via.placeholder.com/90', isAdmin: false };
+            db.ref('users/' + name).set(currentUser);
+            localStorage.setItem('talk_user', JSON.stringify(currentUser));
+            applyUserSession();
         }
 
         function adminLogin() {
             const pwd = prompt("김유준(관리자) 비밀번호를 입력하세요:");
             if (pwd === "2012526") {
-                currentUser = { name: "김유준(관리자)", birth: "2000-01-01", email: "admin@talk.com", youtube: "", bestFriends: [], isAdmin: true };
-                userDatabase[currentUser.name] = currentUser;
+                currentUser = { name: "김유준(관리자)", birth: "2000-01-01", email: "admin@talk.com", photo: "https://via.placeholder.com/90", isAdmin: true };
+                db.ref('users/' + currentUser.name).set(currentUser);
                 localStorage.setItem('talk_user', JSON.stringify(currentUser));
-                saveData();
                 applyUserSession();
                 alert("👑 김유준 관리자님 환영합니다!");
             } else if (pwd !== null) {
@@ -378,18 +399,36 @@
             document.getElementById('myPageBirth').value = currentUser.birth || '';
             document.getElementById('myPageEmail').value = currentUser.email || '';
             document.getElementById('myPageYoutube').value = currentUser.youtube || '';
-            renderYoutubeLink();
+            document.getElementById('myPagePreviewImg').src = currentUser.photo || 'https://via.placeholder.com/90';
+
             renderBestFriendsList();
 
             if (currentUser.isAdmin) {
                 document.getElementById('userBadge').innerText = `(👑 ${currentUser.name})`;
                 document.getElementById('adminTabBtn').style.display = 'inline-block';
-                renderAdminPanel();
             } else {
                 document.getElementById('userBadge').innerText = `(${currentUser.name} 님)`;
                 document.getElementById('adminTabBtn').style.display = 'none';
             }
-            renderRooms();
+        }
+
+        function logout() {
+            localStorage.removeItem('talk_user');
+            currentUser = { name: '', birth: '', email: '', youtube: '', bestFriends: [], photo: '', isAdmin: false };
+            document.getElementById('authOverlay').style.display = 'flex';
+            document.getElementById('mainContainer').classList.remove('unlocked');
+        }
+
+        function uploadProfileImg(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    currentUser.photo = evt.target.result;
+                    document.getElementById('myPagePreviewImg').src = currentUser.photo;
+                };
+                reader.readAsDataURL(file);
+            }
         }
 
         function saveMyPage() {
@@ -397,25 +436,12 @@
             currentUser.email = document.getElementById('myPageEmail').value;
             currentUser.youtube = document.getElementById('myPageYoutube').value;
             
-            userDatabase[currentUser.name] = currentUser;
+            db.ref('users/' + currentUser.name).set(currentUser);
             localStorage.setItem('talk_user', JSON.stringify(currentUser));
-            saveData();
-            renderYoutubeLink();
-            alert("회원 정보가 저장되었습니다!");
+            alert("회원 정보가 실시간 업데이트되었습니다!");
         }
 
-        function renderYoutubeLink() {
-            const ytArea = document.getElementById('ytLinkArea');
-            if (currentUser.youtube) {
-                ytArea.innerHTML = `<a href="${currentUser.youtube}" target="_blank" class="btn-youtube">내 유튜브 채널 바로가기 ➔</a>`;
-            } else {
-                ytArea.innerHTML = '';
-            }
-        }
-
-        // 검색창 중복 지원 및 관리자 검색 포함
         function searchFriend() {
-            loadData();
             const inputName = document.getElementById('searchFriendName').value.trim();
             const dropdown = document.getElementById('searchResultsDropdown');
 
@@ -429,7 +455,7 @@
             if(matches.length > 0) {
                 dropdown.innerHTML = matches.map(u => `
                     <div class="search-result-item" onclick="selectSearchResult('${u}')">
-                        <span><strong>${u}</strong></span>
+                        <span><img src="${userDatabase[u].photo || 'https://via.placeholder.com/30'}" class="profile-img-sm"> <strong>${u}</strong></span>
                         <button class="profile-btn">프로필 보기</button>
                     </div>
                 `).join('');
@@ -447,10 +473,10 @@
         }
 
         function showProfile(username) {
-            loadData();
             selectedProfileUser = username;
-            const targetUser = userDatabase[username] || { name: username, birth: '정보없음', email: '정보없음', youtube: '' };
+            const targetUser = userDatabase[username] || { name: username, birth: '정보없음', email: '정보없음', youtube: '', photo: 'https://via.placeholder.com/90' };
             
+            document.getElementById('profImg').src = targetUser.photo || 'https://via.placeholder.com/90';
             document.getElementById('profTitle').innerText = `👤 ${targetUser.name} 님의 프로필`;
             document.getElementById('profBirth').innerText = targetUser.birth || '미등록';
             document.getElementById('profEmail').innerText = targetUser.email || '미등록';
@@ -462,13 +488,7 @@
                 ytArea.innerHTML = `📺 <strong>유튜브:</strong> 미연동`;
             }
 
-            const actionArea = document.getElementById('profActionArea');
-            if(username === currentUser.name) {
-                actionArea.style.display = 'none';
-            } else {
-                actionArea.style.display = 'block';
-            }
-
+            document.getElementById('profActionArea').style.display = (username === currentUser.name) ? 'none' : 'block';
             document.getElementById('profileOverlay').style.display = 'flex';
         }
 
@@ -482,29 +502,27 @@
                 return alert('이미 찐친으로 등록된 친구입니다!');
             }
             currentUser.bestFriends.push(selectedProfileUser);
-            userDatabase[currentUser.name] = currentUser;
+            db.ref('users/' + currentUser.name).set(currentUser);
             localStorage.setItem('talk_user', JSON.stringify(currentUser));
-            saveData();
             renderBestFriendsList();
             alert(`⭐ ${selectedProfileUser}님을 찐친 목록에 추가했습니다!`);
         }
 
         function requestPrivateChatAction() {
+            const roomId = 'room_' + Date.now();
             const roomName = `1:1 대화: ${currentUser.name} & ${selectedProfileUser}`;
-            rooms.push({
-                id: Date.now(),
+            const newRoom = {
+                id: roomId,
                 name: roomName,
                 type: 'private',
                 members: [currentUser.name, selectedProfileUser],
                 status: '대기중',
                 requester: currentUser.name,
                 messages: []
-            });
-            saveData();
-            alert(`관리자(김유준)에게 ${selectedProfileUser}님과의 1:1 대화 개설 요청을 보냈습니다.`);
+            };
+            db.ref('rooms/' + roomId).set(newRoom);
+            alert(`관리자(김유준)에게 ${selectedProfileUser}님과의 1:1 대화 개설 요청을 실시간 보냈습니다.`);
             closeProfile();
-            renderRooms();
-            if(currentUser.isAdmin) renderAdminPanel();
         }
 
         function renderBestFriendsList() {
@@ -527,64 +545,89 @@
             if(event) event.target.classList.add('active');
         }
 
-        let shareCount = 0;
+        function toggleSection(sectionId) {
+            const target = document.getElementById(sectionId);
+            if(target.style.display === 'block') {
+                target.style.display = 'none';
+            } else {
+                target.style.display = 'block';
+            }
+        }
+
         function addShare() {
             const title = document.getElementById('shareTitle').value;
             const content = document.getElementById('shareContent').value;
             if(!title || !content) return alert('내용을 입력하세요.');
             
-            shareCount++;
-            const list = document.getElementById('shareList');
-            const card = document.createElement('div');
-            card.className = 'card';
-            card.innerHTML = `
-                <h4>${title} 
-                    <small style="font-weight:normal; font-size:0.8rem; color:#777;">
-                        by ${currentUser.name} 
-                        <button class="profile-btn" onclick="showProfile('${currentUser.name}')">프로필</button>
-                    </small>
-                </h4>
-                <p style="margin-top:5px;">${content}</p>
-                <div class="comment-section">
-                    <strong>💬 댓글</strong>
-                    <div id="comments-${shareCount}"></div>
-                    <div class="comment-input-group">
-                        <input type="text" id="input-comment-${shareCount}" placeholder="댓글 입력...">
-                        <button class="btn" onclick="addComment(${shareCount})">등록</button>
-                    </div>
-                </div>
-            `;
-            list.prepend(card);
+            const shareId = 'share_' + Date.now();
+            db.ref('shares/' + shareId).set({
+                id: shareId,
+                title: title,
+                content: content,
+                author: currentUser.name,
+                authorPhoto: currentUser.photo || 'https://via.placeholder.com/30',
+                comments: []
+            });
             document.getElementById('shareTitle').value = '';
             document.getElementById('shareContent').value = '';
         }
 
-        function addComment(postId) {
-            const input = document.getElementById(`input-comment-${postId}`);
+        function renderShares() {
+            const list = document.getElementById('shareList');
+            if(!list) return;
+            list.innerHTML = '';
+            shares.reverse().forEach(post => {
+                list.innerHTML += `
+                    <div class="card">
+                        <h4><img src="${post.authorPhoto}" class="profile-img-sm"> ${post.title} 
+                            <small style="font-weight:normal; font-size:0.8rem; color:#777;">
+                                by ${post.author} <button class="profile-btn" onclick="showProfile('${post.author}')">프로필</button>
+                            </small>
+                        </h4>
+                        <p style="margin-top:5px;">${post.content}</p>
+                        <div class="comment-section">
+                            <strong>💬 댓글</strong>
+                            <div>${(post.comments || []).map(c => `<div class="comment-item"><img src="${c.photo}" class="profile-img-sm"> <strong>${c.author}</strong>: ${c.text}</div>`).join('')}</div>
+                            <div class="comment-input-group">
+                                <input type="text" id="input-comment-${post.id}" placeholder="댓글 입력...">
+                                <button class="btn" onclick="addComment('${post.id}')">등록</button>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        function addComment(shareId) {
+            const input = document.getElementById(`input-comment-${shareId}`);
             if(!input.value.trim()) return;
 
-            const commentArea = document.getElementById(`comments-${postId}`);
-            const item = document.createElement('div');
-            item.className = 'comment-item';
-            item.innerHTML = `
-                <strong>${currentUser.name}</strong>
-                <button class="profile-btn" onclick="showProfile('${currentUser.name}')">프로필</button>: 
-                ${input.value}
-            `;
-            commentArea.appendChild(item);
-            input.value = '';
+            const targetShare = shares.find(s => s.id === shareId);
+            if(targetShare) {
+                if(!targetShare.comments) targetShare.comments = [];
+                targetShare.comments.push({
+                    author: currentUser.name,
+                    photo: currentUser.photo || 'https://via.placeholder.com/30',
+                    text: input.value
+                });
+                db.ref('shares/' + shareId).set(targetShare);
+            }
         }
 
         function requestRoom() {
             const roomName = document.getElementById('roomName').value;
             if(!roomName) return alert('방 이름을 입력하세요.');
             
-            rooms.push({ id: Date.now(), name: roomName, type: 'group', status: '대기중', requester: currentUser.name, messages: [] });
-            saveData();
-            alert('관리자에게 신청이 전달되었습니다.');
+            const roomId = 'room_' + Date.now();
+            db.ref('rooms/' + roomId).set({
+                id: roomId,
+                name: roomName,
+                type: 'group',
+                status: '대기중',
+                requester: currentUser.name,
+                messages: []
+            });
+            alert('관리자에게 신청이 전송되었습니다.');
             document.getElementById('roomName').value = '';
-            renderRooms();
-            if(currentUser.isAdmin) renderAdminPanel();
         }
 
         function renderRooms() {
@@ -594,21 +637,18 @@
 
             rooms.forEach(room => {
                 if(room.status === '승인됨') {
-                    if(room.type === 'private' && !room.members.includes(currentUser.name) && !currentUser.isAdmin) {
-                        return;
-                    }
+                    if(room.type === 'private' && !(room.members && room.members.includes(currentUser.name)) && !currentUser.isAdmin) return;
 
-                    let chatHtml = `<div class="card">
+                    approvedList.innerHTML += `<div class="card">
                         <strong>🚀 ${room.name}</strong> <span class="badge approved">개설 완료</span>
                         <div class="chat-box" id="chatBox-${room.id}">
-                            ${room.messages.map(m => `<div><strong>${m.sender}:</strong> ${m.text}</div>`).join('')}
+                            ${(room.messages || []).map(m => `<div><strong>${m.sender}:</strong> ${m.text}</div>`).join('')}
                         </div>
                         <div class="comment-input-group">
                             <input type="text" id="chatInput-${room.id}" placeholder="메시지 입력...">
-                            <button class="btn" onclick="sendChatMessage(${room.id})">전송</button>
+                            <button class="btn" onclick="sendChatMessage('${room.id}')">전송</button>
                         </div>
                     </div>`;
-                    approvedList.innerHTML += chatHtml;
                 }
             });
             if(!approvedList.innerHTML) approvedList.innerHTML = '<p style="color:#777;">개설되었거나 참여 중인 방이 없습니다.</p>';
@@ -620,18 +660,14 @@
 
             const room = rooms.find(r => r.id === roomId);
             if(room) {
+                if(!room.messages) room.messages = [];
                 room.messages.push({ sender: currentUser.name, text: input.value });
-                saveData();
-                input.value = '';
-                renderRooms();
-                if(currentUser.isAdmin) renderAdminPanel();
+                db.ref('rooms/' + roomId).set(room);
             }
         }
 
-        // --- 관리자 전용 기능 ---
         function renderAdminPanel() {
             if(!currentUser.isAdmin) return;
-            loadData();
 
             // 1. 승인 대기 목록
             const adminList = document.getElementById('adminRoomList');
@@ -642,13 +678,13 @@
                         <div class="card">
                             <strong>${room.name}</strong> (${room.type === 'private' ? '1:1 대화' : '단체방'})
                             <br>신청자: ${room.requester} <button class="profile-btn" onclick="showProfile('${room.requester}')">프로필</button>
-                            <br><button class="btn btn-admin" style="width:auto; margin-top:5px; padding:5px 10px; font-size:0.8rem;" onclick="approveRoom(${room.id})">개설 허가하기</button>
+                            <br><button class="btn btn-admin" style="width:auto; margin-top:5px; padding:5px 10px; font-size:0.8rem;" onclick="approveRoom('${room.id}')">개설 허가하기</button>
                         </div>`;
                 }
             });
             if(!adminList.innerHTML) adminList.innerHTML = '<p style="color:#777;">대기 중인 개설 신청이 없습니다.</p>';
 
-            // 2. 실시간 대화 모니터링 및 방 폐쇄/삭제
+            // 2. 채팅 감시
             const monitorArea = document.getElementById('adminChatMonitorArea');
             monitorArea.innerHTML = '';
             rooms.forEach(room => {
@@ -656,16 +692,16 @@
                     <div class="card" style="background:#f8f9fa;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <strong>📌 ${room.name} (${room.status})</strong>
-                            <button class="btn btn-ban" style="width:auto; padding:3px 8px; font-size:0.75rem;" onclick="deleteRoomByAdmin(${room.id})">대화방 강제 삭제</button>
+                            <button class="btn btn-ban" style="width:auto; padding:3px 8px; font-size:0.75rem;" onclick="deleteRoomByAdmin('${room.id}')">대화방 강제 삭제</button>
                         </div>
                         <div class="chat-box" style="height:120px;">
-                            ${room.messages.length > 0 ? room.messages.map(m => `<div><strong>${m.sender}:</strong> ${m.text}</div>`).join('') : '<span style="color:#777;">대화 내역 없음</span>'}
+                            ${(room.messages || []).length > 0 ? room.messages.map(m => `<div><strong>${m.sender}:</strong> ${m.text}</div>`).join('') : '<span style="color:#777;">대화 내역 없음</span>'}
                         </div>
                     </div>`;
             });
             if(!monitorArea.innerHTML) monitorArea.innerHTML = '<p style="color:#777;">생성된 대화방이 없습니다.</p>';
 
-            // 3. 정지 대상 유저 드롭다운
+            // 3. 정지 유저 선택
             const banSelect = document.getElementById('banTargetUserSelect');
             banSelect.innerHTML = '';
             for(let u in userDatabase) {
@@ -687,29 +723,17 @@
                     </div>`;
             }
             if(!bannedArea.innerHTML) bannedArea.innerHTML = '<p style="color:#777;">현재 정지된 회원이 없습니다.</p>';
-
-            // 5. 문의함 출력
-            renderInquiries();
-        }
-
-        function deleteRoomByAdmin(roomId) {
-            if(confirm("이 대화방을 강제로 삭제하시겠습니까?")) {
-                rooms = rooms.filter(r => r.id !== roomId);
-                saveData();
-                renderRooms();
-                renderAdminPanel();
-                alert("대화방이 삭제되었습니다.");
-            }
         }
 
         function approveRoom(id) {
-            const room = rooms.find(r => r.id === id);
-            if(room) {
-                room.status = '승인됨';
-                saveData();
-                alert(`'${room.name}' 개설을 승인했습니다.`);
-                renderRooms();
-                renderAdminPanel();
+            db.ref('rooms/' + id + '/status').set('승인됨');
+            alert("대화방 승인이 완료되었습니다.");
+        }
+
+        function deleteRoomByAdmin(id) {
+            if(confirm("이 대화방을 강제로 삭제하시겠습니까?")) {
+                db.ref('rooms/' + id).remove();
+                alert("대화방이 삭제되었습니다.");
             }
         }
 
@@ -724,35 +748,34 @@
             const banUntil = now + (durationDays * 24 * 60 * 60 * 1000);
             const durationText = durationDays >= 99999 ? '영구' : `${durationDays}일`;
 
-            bannedDatabase[target] = {
+            db.ref('banned/' + target).set({
                 banUntil: banUntil,
                 durationText: durationText,
                 reason: reason,
                 deviceId: currentDeviceId
-            };
+            });
 
-            saveData();
             alert(`🚨 [${target}] 회원을 ${durationText} 정지 처리했습니다.`);
-            document.getElementById('banReasonInput').value = '';
-            renderAdminPanel();
         }
 
         function unbanUser(username) {
-            delete bannedDatabase[username];
-            saveData();
+            db.ref('banned/' + username).remove();
             alert(`[${username}] 회원의 정지를 해제했습니다.`);
-            renderAdminPanel();
         }
 
         function submitInquiry() {
             const content = document.getElementById('inquiryContent').value;
             if(!content) return alert('내용을 입력해주세요.');
-            
-            inquiries.push({ sender: currentUser.name, content: content });
-            saveData();
-            alert('관리자(김유준)에게 문의가 전달되었습니다.');
+
+            const inqId = 'inq_' + Date.now();
+            db.ref('inquiries/' + inqId).set({
+                id: inqId,
+                sender: currentUser.name,
+                content: content
+            });
+
+            alert('관리자(김유준)에게 문의 내역이 전송되었습니다.');
             document.getElementById('inquiryContent').value = '';
-            if(currentUser.isAdmin) renderAdminPanel();
         }
 
         function renderInquiries() {
