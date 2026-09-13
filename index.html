@@ -69,7 +69,6 @@
         .collapsible-content { display: none; margin-top: 15px; border: 1px dashed #bdc3c7; padding: 15px; border-radius: 8px; background: #fff; }
         .notice-content { text-align: left; background: #fffde7; padding: 15px; border-radius: 6px; border: 1px solid #ffe082; margin: 15px 0; white-space: pre-wrap; font-size: 0.95rem; }
         
-        /* 터미널 스타일 */
         .terminal-box { background: #000; color: #00ff00; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 0.85rem; height: 160px; overflow-y: auto; margin-top: 10px; text-align: left; }
     </style>
 </head>
@@ -347,7 +346,6 @@
         }
 
         window.onload = function() {
-            // 1. 먼저 정지 목록과 사용자 목록을 일회성/실시간으로 모두 정확히 확보한 뒤 세션을 복원합니다.
             db.ref('banned').once('value').then(banSnap => {
                 bannedDatabase = banSnap.val() || {};
                 
@@ -359,13 +357,11 @@
                         db.ref('users/김유준(관리자)').set(userDatabase["김유준(관리자)"]);
                     }
 
-                    // 2. 저장된 로그인 정보가 있는지 확인
                     const savedUser = localStorage.getItem('talk_user');
                     if (savedUser) {
                         try {
                             const parsed = JSON.parse(savedUser);
                             if (parsed && parsed.name) {
-                                // 3. 접속하자마자 정지 상태 검사부터 철저히 수행
                                 if (!checkBanStatusInstant(parsed.name)) {
                                     if (userDatabase[parsed.name]) {
                                         currentUser = userDatabase[parsed.name];
@@ -378,7 +374,6 @@
                         }
                     }
 
-                    // 4. 이후 실시간 리스너 작동 시작
                     listenRealtimeData();
                 });
             });
@@ -389,6 +384,17 @@
             if (!target) return;
             const currentDisplay = window.getComputedStyle(target).display;
             target.style.display = (currentDisplay === 'none') ? 'block' : 'none';
+        }
+
+        function openTab(tabId, evt) {
+            const contents = document.getElementsByClassName('tab-content');
+            for(let i=0; i<contents.length; i++) contents[i].classList.remove('active');
+            
+            const navBtns = document.querySelectorAll('nav button');
+            for(let i=0; i<navBtns.length; i++) navBtns[i].classList.remove('active');
+
+            document.getElementById(tabId).classList.add('active');
+            if(evt) evt.target.classList.add('active');
         }
 
         function listenRealtimeData() {
@@ -410,7 +416,7 @@
 
             db.ref('rooms').on('value', snapshot => {
                 const data = snapshot.val() || {};
-                rooms = Object.keys(data).map(key => data[key]);
+                rooms = Object.keys(data).map(key => ({ ...data[key], key: key }));
                 renderRooms();
                 if(currentUser.isAdmin) {
                     renderAdminPanel();
@@ -419,13 +425,13 @@
 
             db.ref('inquiries').on('value', snapshot => {
                 const data = snapshot.val() || {};
-                inquiries = Object.keys(data).map(key => data[key]);
+                inquiries = Object.keys(data).map(key => ({ ...data[key], key: key }));
                 if(currentUser.isAdmin) renderInquiries();
             });
 
             db.ref('shares').on('value', snapshot => {
                 const data = snapshot.val() || {};
-                shares = Object.keys(data).map(key => data[key]);
+                shares = Object.keys(data).map(key => ({ ...data[key], key: key }));
                 renderShares();
             });
 
@@ -459,7 +465,6 @@
             alert('전체 공지사항이 등록 및 업데이트되었습니다.');
         }
 
-        // 즉시 실행용 정지 체크 (로그인/새로고침 직후 딜레이 없이 차단)
         function checkBanStatusInstant(username) {
             let banInfo = bannedDatabase[username];
             if (!banInfo) {
@@ -517,7 +522,6 @@
                 return alert("'관리자' 단어가 들어간 이름으로는 가입할 수 없습니다.");
             }
 
-            // 로그인 시도 시점에도 정지 여부 확인
             if (checkBanStatusInstant(name)) return;
 
             if (userDatabase[name]) {
@@ -560,6 +564,8 @@
             if (currentUser.isAdmin) {
                 document.getElementById('userBadge').innerText = `(👑 ${currentUser.name})`;
                 document.getElementById('adminTabBtn').style.display = 'inline-block';
+                renderAdminPanel();
+                renderInquiries();
             } else {
                 document.getElementById('userBadge').innerText = `(${currentUser.name} 님)`;
                 document.getElementById('adminTabBtn').style.display = 'none';
@@ -653,47 +659,80 @@
             const allUsers = Object.keys(userDatabase);
             const matches = allUsers.filter(u => u.toLowerCase().includes(inputName));
 
-            if (matches.length > 0) {
-                dropdown.innerHTML = matches.map(u => {
-                    const userData = userDatabase[u] || {};
-                    const photo = userData.photo || 'https://via.placeholder.com/30';
-                    return `
-                        <div class="search-result-item" onclick="selectBanTargetFromDropdown('${u}')">
-                            <span><img src="${photo}" class="profile-img-sm"> <strong>${u}</strong></span>
-                            <span style="font-size:0.8rem; color:#27ae60;">선택하기</span>
-                        </div>
-                    `;
-                }).join('');
+            if(matches.length > 0) {
+                dropdown.innerHTML = matches.map(u => `
+                    <div class="search-result-item" onclick="selectBanTarget('${u}')">
+                        <span><strong>${u}</strong></span>
+                    </div>
+                `).join('');
                 dropdown.style.display = 'block';
             } else {
-                dropdown.innerHTML = '<div style="padding:10px; color:#777; font-size:0.85rem;">직접 입력한 이름으로 정지 적용됩니다.</div>';
-                dropdown.style.display = 'block';
+                dropdown.style.display = 'none';
             }
         }
 
-        function selectBanTargetFromDropdown(username) {
+        function selectBanTarget(username) {
             document.getElementById('banTargetSearchInput').value = username;
             document.getElementById('banDropdown').style.display = 'none';
-            document.getElementById('banTargetSearchResult').innerHTML = `✅ [${username}] 회원이 선택되었습니다.`;
+            document.getElementById('banTargetSearchResult').innerHTML = `✅ [${username}] 회원이 지정되었습니다.`;
+        }
+
+        // 회원 정지 처리 기능 수정
+        function executeBanUser() {
+            const username = document.getElementById('banTargetSearchInput').value.trim();
+            const duration = parseInt(document.getElementById('banDurationSelect').value);
+            const reason = document.getElementById('banReasonInput').value.trim() || "관리자에 의한 정지";
+
+            if(!username) return alert("정지할 회원의 이름을 입력하세요.");
+            if(username === "김유준(관리자)") return alert("관리자는 정지시킬 수 없습니다.");
+
+            const now = new Date().getTime();
+            const banUntil = (duration === 99999) ? now + (36500 * 24 * 60 * 60 * 1000) : now + (duration * 24 * 60 * 60 * 1000);
+            const durationText = (duration === 99999) ? "영구" : `${duration}일`;
+
+            const banObj = {
+                username: username,
+                banUntil: banUntil,
+                durationText: durationText,
+                reason: reason,
+                deviceId: (userDatabase[username] && userDatabase[username].deviceId) ? userDatabase[username].deviceId : ''
+            };
+
+            db.ref('banned/' + username).set(banObj, (err) => {
+                if(err) {
+                    alert("정지 처리에 실패했습니다.");
+                } else {
+                    alert(`🚨 [${username}] 회원이 ${durationText} 정지 처리되었습니다.`);
+                    document.getElementById('banTargetSearchInput').value = '';
+                    document.getElementById('banReasonInput').value = '';
+                    document.getElementById('banTargetSearchResult').innerHTML = '';
+                }
+            });
+        }
+
+        function unbanUser(username) {
+            if(confirm(`[${username}] 회원의 정지를 해제하시겠습니까?`)) {
+                db.ref('banned/' + username).remove();
+                alert("정지가 해제되었습니다.");
+            }
         }
 
         function showProfile(username) {
             selectedProfileUser = username;
-            const targetUser = userDatabase[username] || { name: username, birth: '정보없음', email: '정보없음', youtube: '', photo: 'https://via.placeholder.com/90' };
+            const target = userDatabase[username] || { name: username, birth: '비공개', email: '미등록', youtube: '', photo: 'https://via.placeholder.com/90' };
             
-            document.getElementById('profImg').src = targetUser.photo || 'https://via.placeholder.com/90';
-            document.getElementById('profTitle').innerText = `👤 ${targetUser.name} 님의 프로필`;
-            document.getElementById('profBirth').innerText = targetUser.birth || '미등록';
-            document.getElementById('profEmail').innerText = targetUser.email || '미등록';
-            
+            document.getElementById('profTitle').innerText = `👤 ${target.name} 님의 프로필`;
+            document.getElementById('profBirth').innerText = target.birth || '비공개';
+            document.getElementById('profEmail').innerText = target.email || '미등록';
+            document.getElementById('profImg').src = target.photo || 'https://via.placeholder.com/90';
+
             const ytArea = document.getElementById('profYtArea');
-            if (targetUser.youtube) {
-                ytArea.innerHTML = `📺 <strong>유튜브:</strong> <a href="${targetUser.youtube}" target="_blank" style="color:#ff0000; font-weight:bold;">채널 방문하기 ➔</a>`;
+            if(target.youtube) {
+                ytArea.innerHTML = `📺 <strong>유튜브:</strong> <a href="${target.youtube}" target="_blank" style="color:#3498db;">채널 방문하기</a>`;
             } else {
                 ytArea.innerHTML = `📺 <strong>유튜브:</strong> 미연동`;
             }
 
-            document.getElementById('profActionArea').style.display = (username === currentUser.name) ? 'none' : 'block';
             document.getElementById('profileOverlay').style.display = 'flex';
         }
 
@@ -702,336 +741,245 @@
         }
 
         function addBestFriendAction() {
-            if(!currentUser.bestFriends) currentUser.bestFriends = [];
-            if(currentUser.bestFriends.includes(selectedProfileUser)) {
-                return alert('이미 찐친으로 등록된 친구입니다!');
+            if (!currentUser.name) return alert("로그인이 필요합니다.");
+            if (selectedProfileUser === currentUser.name) return alert("자기 자신은 찐친으로 등록할 수 없습니다.");
+            
+            if (!Array.isArray(currentUser.bestFriends)) currentUser.bestFriends = [];
+            if (currentUser.bestFriends.includes(selectedProfileUser)) {
+                return alert("이미 찐친 목록에 등록되어 있습니다.");
             }
+
             currentUser.bestFriends.push(selectedProfileUser);
             db.ref('users/' + currentUser.name).set(currentUser);
             localStorage.setItem('talk_user', JSON.stringify(currentUser));
             renderBestFriendsList();
-            alert(`⭐ ${selectedProfileUser}님을 찐친 목록에 추가했습니다!`);
-        }
-
-        function requestPrivateChatAction() {
-            const roomId = 'room_' + Date.now();
-            const roomName = `1:1 대화: ${currentUser.name} & ${selectedProfileUser}`;
-            const newRoom = {
-                id: roomId,
-                name: roomName,
-                type: 'private',
-                members: [currentUser.name, selectedProfileUser],
-                status: '대기중',
-                requester: currentUser.name,
-                messages: []
-            };
-            db.ref('rooms/' + roomId).set(newRoom);
-            alert(`관리자(김유준)에게 ${selectedProfileUser}님과의 1:1 대화 개설 요청을 보냈습니다.`);
-            closeProfile();
+            alert(`⭐ [${selectedProfileUser}] 님이 찐친으로 등록되었습니다!`);
         }
 
         function renderBestFriendsList() {
-            const area = document.getElementById('bestFriendListArea');
-            if (currentUser.bestFriends && currentUser.bestFriends.length > 0) {
-                area.innerHTML = currentUser.bestFriends.map(f => `
-                    <span class="friend-chip">
-                        ⭐ ${f} <button class="profile-btn" onclick="showProfile('${f}')">프로필</button>
-                    </span>
-                `).join('');
-            } else {
-                area.innerHTML = '<p style="color:#777; font-size:0.9rem;">아직 찐친이 없습니다.</p>';
+            const listArea = document.getElementById('bestFriendListArea');
+            if (!currentUser.bestFriends || currentUser.bestFriends.length === 0) {
+                listArea.innerHTML = '<p style="color:#777; font-size:0.9rem;">아직 찐친이 없습니다.</p>';
+                return;
             }
+            listArea.innerHTML = currentUser.bestFriends.map(f => `<span class="friend-chip">⭐ ${f}</span>`).join('');
         }
 
-        function openTab(tabId, evt) {
-            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
-            if(evt && evt.target) evt.target.classList.add('active');
+        // 1:1 대화 요청 기능
+        function requestPrivateChatAction() {
+            if (!currentUser.name) return alert("로그인이 필요합니다.");
+            if (selectedProfileUser === currentUser.name) return alert("자기 자신에게 대화를 요청할 수 없습니다.");
+
+            const roomName = `1:1 대화 (${currentUser.name} & ${selectedProfileUser})`;
+            const newRoomRef = db.ref('rooms').push();
+            newRoomRef.set({
+                name: roomName,
+                requester: currentUser.name,
+                target: selectedProfileUser,
+                approved: true, // 1:1 대화방은 즉시 활성화
+                isPrivate: true,
+                createdAt: new Date().toLocaleString()
+            });
+
+            alert(`💬 [${selectedProfileUser}] 님과의 1:1 대화방이 생성되었습니다. 채팅방 탭에서 확인하세요!`);
+            closeProfile();
         }
 
+        // 단체 채팅방 개설 요청 기능
+        function requestRoom() {
+            const rName = document.getElementById('roomName').value.trim();
+            if(!rName) return alert("채팅방 이름을 입력해주세요.");
+            if(!currentUser.name) return alert("로그인이 필요합니다.");
+
+            const newRoomRef = db.ref('rooms').push();
+            newRoomRef.set({
+                name: rName,
+                requester: currentUser.name,
+                approved: false,
+                createdAt: new Date().toLocaleString()
+            });
+
+            document.getElementById('roomName').value = '';
+            alert("관리자에게 채팅방 개설 승인 요청이 송신되었습니다!");
+        }
+
+        // 활성화된 채팅방 목록 출력
+        function renderRooms() {
+            const container = document.getElementById('approvedRoomList');
+            const approved = rooms.filter(r => r.approved === true);
+
+            if(approved.length === 0) {
+                container.innerHTML = '<p style="color:#777; margin-top:10px;">현재 개설된 채팅방이 없습니다.</p>';
+                return;
+            }
+
+            container.innerHTML = approved.map(r => `
+                <div class="card" style="margin-top:10px;">
+                    <h4>💬 ${r.name} <span class="badge approved">개설완료</span></h4>
+                    <p style="font-size:0.85rem; color:#777;">개설자: ${r.requester} | ${r.createdAt}</p>
+                    <button class="btn" style="margin-top:10px; background:#2ecc71;" onclick="enterRoom('${r.name}')">입장하기</button>
+                </div>
+            `).join('');
+        }
+
+        function enterRoom(roomName) {
+            alert(`[${roomName}] 채팅방에 입장합니다.`);
+        }
+
+        // 일반 문의 제출 기능
+        function submitInquiry() {
+            const content = document.getElementById('inquiryContent').value.trim();
+            if(!content) return alert("문의 내용을 입력해 주세요.");
+            if(!currentUser.name) return alert("로그인이 필요합니다.");
+
+            const newInquiryRef = db.ref('inquiries').push();
+            newInquiryRef.set({
+                user: currentUser.name,
+                content: content,
+                date: new Date().toLocaleString()
+            });
+
+            document.getElementById('inquiryContent').value = '';
+            alert("관리자에게 문의 내역이 성공적으로 전달되었습니다!");
+        }
+
+        // 공유글 등록 및 목록 관리
         function addShare() {
             const title = document.getElementById('shareTitle').value.trim();
             const content = document.getElementById('shareContent').value.trim();
-            if(!title || !content) return alert('제목과 내용을 모두 입력하세요.');
-            
-            const shareId = 'share_' + Date.now();
-            db.ref('shares/' + shareId).set({
-                id: shareId,
+            if(!title || !content) return alert("제목과 내용을 작성해주세요.");
+
+            const shareRef = db.ref('shares').push();
+            shareRef.set({
+                author: currentUser.name,
                 title: title,
                 content: content,
-                author: currentUser.name,
-                authorPhoto: currentUser.photo || 'https://via.placeholder.com/30',
+                date: new Date().toLocaleString(),
                 comments: []
             });
+
             document.getElementById('shareTitle').value = '';
             document.getElementById('shareContent').value = '';
-            alert('공유글이 등록되었습니다!');
-            
-            openTab('shareListTab', null);
-            document.querySelectorAll('.nav-btn').forEach(btn => {
-                if(btn.innerText.includes('공유글')) btn.classList.add('active');
-            });
+            alert("공유글이 등록되었습니다!");
+            openTab('shareListTab');
         }
 
         function renderShares() {
             const container = document.getElementById('shareListContainer');
-            if(!container) return;
-            container.innerHTML = '';
-            shares.slice().reverse().forEach(post => {
-                container.innerHTML += `
+            if(shares.length === 0) {
+                container.innerHTML = '<p style="color:#777;">등록된 공유글이 없습니다.</p>';
+                return;
+            }
+
+            container.innerHTML = shares.map(s => `
+                <div class="card">
+                    <h3>${s.title}</h3>
+                    <p style="font-size:0.85rem; color:#777;">작성자: ${s.author} | ${s.date}</p>
+                    <p style="margin: 10px 0; white-space: pre-wrap;">${s.content}</p>
+                </div>
+            `).join('');
+        }
+
+        // 관리자 제어판 개설 승인 요청 및 정지 목록 렌더링
+        function renderAdminPanel() {
+            // 1. 개설 승인 대기 목록
+            const roomListArea = document.getElementById('adminRoomList');
+            const pendingRooms = rooms.filter(r => !r.approved);
+
+            if(pendingRooms.length === 0) {
+                roomListArea.innerHTML = '<p style="color:#777;">대기 중인 방 개설 요청이 없습니다.</p>';
+            } else {
+                roomListArea.innerHTML = pendingRooms.map(r => `
                     <div class="card">
-                        <h4><img src="${post.authorPhoto}" class="profile-img-sm"> ${post.title} 
-                            <small style="font-weight:normal; font-size:0.8rem; color:#777;">
-                                by ${post.author} <button class="profile-btn" onclick="showProfile('${post.author}')">프로필</button>
-                            </small>
-                        </h4>
-                        <p style="margin-top:5px;">${post.content}</p>
-                        <div class="comment-section">
-                            <strong>💬 댓글</strong>
-                            <div>${(post.comments || []).map(c => `<div class="comment-item"><img src="${c.photo}" class="profile-img-sm"> <strong>${c.author}</strong>: ${c.text}</div>`).join('')}</div>
-                            <div class="comment-input-group">
-                                <input type="text" id="input-comment-${post.id}" placeholder="댓글 입력...">
-                                <button class="btn" onclick="addComment('${post.id}')">등록</button>
+                        <strong>${r.name}</strong> (신청자: ${r.requester})
+                        <div style="margin-top:5px; display:flex; gap:5px;">
+                            <button class="btn" style="background:#2ecc71; padding:4px 8px; font-size:0.8rem;" onclick="approveRoom('${r.key}')">승인</button>
+                            <button class="btn btn-ban" style="padding:4px 8px; font-size:0.8rem;" onclick="rejectRoom('${r.key}')">거절</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            // 2. 현재 정지 회원 목록
+            const banListArea = document.getElementById('bannedUserListArea');
+            const bannedKeys = Object.keys(bannedDatabase);
+
+            if(bannedKeys.length === 0) {
+                banListArea.innerHTML = '<p style="color:#777;">현재 정지된 회원이 없습니다.</p>';
+            } else {
+                banListArea.innerHTML = bannedKeys.map(k => {
+                    const b = bannedDatabase[k];
+                    return `
+                        <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <strong>🚫 ${b.username}</strong> (${b.durationText})<br>
+                                <span style="font-size:0.8rem; color:#777;">사유: ${b.reason}</span>
                             </div>
+                            <button class="btn" style="width:auto; background:#3498db; padding:4px 10px; font-size:0.8rem;" onclick="unbanUser('${b.username}')">정지 해제</button>
                         </div>
-                    </div>`;
-            });
-            if(!container.innerHTML) container.innerHTML = '<p style="color:#777;">등록된 공유글이 없습니다.</p>';
-        }
-
-        function addComment(shareId) {
-            const input = document.getElementById(`input-comment-${shareId}`);
-            if(!input.value.trim()) return;
-
-            const targetShare = shares.find(s => s.id === shareId);
-            if(targetShare) {
-                if(!targetShare.comments) targetShare.comments = [];
-                targetShare.comments.push({
-                    author: currentUser.name,
-                    photo: currentUser.photo || 'https://via.placeholder.com/30',
-                    text: input.value
-                });
-                db.ref('shares/' + shareId).set(targetShare);
+                    `;
+                }).join('');
             }
         }
 
-        function requestRoom() {
-            const roomName = document.getElementById('roomName').value.trim();
-            if(!roomName) return alert('방 이름을 입력하세요.');
-            
-            const roomId = 'room_' + Date.now();
-            const newRoomData = {
-                id: roomId,
-                name: roomName,
-                type: 'group',
-                status: '대기중',
-                requester: currentUser.name,
-                messages: []
-            };
-
-            db.ref('rooms/' + roomId).set(newRoomData).then(() => {
-                alert('관리자에게 방 개설 신청이 실시간 전송되었습니다.');
-                document.getElementById('roomName').value = '';
-            }).catch(err => {
-                alert('전송 실패: ' + err.message);
-            });
+        function approveRoom(key) {
+            db.ref('rooms/' + key + '/approved').set(true);
+            alert("채팅방 개설을 승인하였습니다.");
         }
 
-        function renderRooms() {
-            const approvedList = document.getElementById('approvedRoomList');
-            if(!approvedList) return;
-            approvedList.innerHTML = '';
-
-            rooms.forEach(room => {
-                if(room.status === '승인됨') {
-                    if(room.type === 'private' && !(room.members && room.members.includes(currentUser.name)) && !currentUser.isAdmin) return;
-
-                    approvedList.innerHTML += `<div class="card">
-                        <strong>🚀 ${room.name}</strong> <span class="badge approved">개설 완료</span>
-                        <div class="chat-box" id="chatBox-${room.id}">
-                            ${(room.messages || []).map(m => `<div><strong>${m.sender}:</strong> ${m.text}</div>`).join('')}
-                        </div>
-                        <div class="comment-input-group">
-                            <input type="text" id="chatInput-${room.id}" placeholder="메시지 입력...">
-                            <button class="btn" onclick="sendChatMessage('${room.id}')">전송</button>
-                        </div>
-                    </div>`;
-                }
-            });
-            if(!approvedList.innerHTML) approvedList.innerHTML = '<p style="color:#777;">개설되었거나 참여 중인 방이 없습니다.</p>';
+        function rejectRoom(key) {
+            db.ref('rooms/' + key).remove();
+            alert("채팅방 개설 요청을 거절하였습니다.");
         }
 
-        function sendChatMessage(roomId) {
-            const input = document.getElementById(`chatInput-${roomId}`);
-            if(!input.value.trim()) return;
-
-            const room = rooms.find(r => r.id === roomId);
-            if(room) {
-                if(!room.messages) room.messages = [];
-                room.messages.push({ sender: currentUser.name, text: input.value });
-                db.ref('rooms/' + roomId).set(room);
+        // 관리자 문의함 목록 렌더링
+        function renderInquiries() {
+            const inquiryList = document.getElementById('inquiryList');
+            if(inquiries.length === 0) {
+                inquiryList.innerHTML = '<p style="color:#777;">접수된 문의 내역이 없습니다.</p>';
+                return;
             }
+
+            inquiryList.innerHTML = inquiries.map(i => `
+                <div class="card">
+                    <strong>👤 ${i.user}</strong> <span style="font-size:0.8rem; color:#777;">(${i.date})</span>
+                    <p style="margin-top:8px; white-space:pre-wrap;">${i.content}</p>
+                </div>
+            `).join('');
         }
 
-        async function startFastProcess() {
-            if(isTaskRunning) return alert('이미 작업이 실행 중입니다.');
+        // 터미널 제어 가상 프로세스 기능
+        function startFastProcess() {
+            if(isTaskRunning) return;
             isTaskRunning = true;
             taskAbortFlag = false;
-
             const logBox = document.getElementById('terminalLog');
-            logBox.innerHTML = '>>> [시스템] 고속 프로세스 가동 시작...\n';
+            logBox.innerHTML = "> 고속 모니터링 연산 프로세스를 시작합니다...\n";
 
-            try {
-                for (let i = 1; i <= 10; i++) {
-                    if (taskAbortFlag) {
-                        logBox.innerHTML += '>>> [중단됨] 사용자에 의해 작업이 강제로 중단되었습니다.\n';
-                        break;
-                    }
-                    await new Promise(res => setTimeout(res, 150));
-                    logBox.innerHTML += `> [고속 연산] 단계 [${i}/10] 처리 완료...\n`;
-                    logBox.scrollTop = logBox.scrollHeight;
+            let count = 0;
+            const interval = setInterval(() => {
+                if(taskAbortFlag) {
+                    clearInterval(interval);
+                    logBox.innerHTML += "> 🛑 작업이 사용자에 의해 중단되었습니다.\n";
+                    isTaskRunning = false;
+                    return;
                 }
-                if (!taskAbortFlag) {
-                    logBox.innerHTML += '>>> [성공] 모든 시스템 프로세스가 완벽하게 완료되었습니다.\n';
+                count++;
+                logBox.innerHTML += `> [Process Track] System Checking Node #${count} OK\n`;
+                logBox.scrollTop = logBox.scrollHeight;
+
+                if(count >= 20) {
+                    clearInterval(interval);
+                    logBox.innerHTML += "> ✅ 모든 고속 진단 및 점검 완료.\n";
+                    isTaskRunning = false;
                 }
-            } catch (err) {
-                logBox.innerHTML += `>>> [오류] ${err.message}\n`;
-            } finally {
-                isTaskRunning = false;
-                taskAbortFlag = false;
-            }
+            }, 300);
         }
 
         function stopFastProcess() {
-            if (!isTaskRunning) return alert('현재 실행 중인 작업이 없습니다.');
-            taskAbortFlag = true;
-        }
-
-        function renderAdminPanel() {
-            if(!currentUser.isAdmin) return;
-
-            const adminList = document.getElementById('adminRoomList');
-            adminList.innerHTML = '';
-            rooms.forEach(room => {
-                if(room.status !== '승인됨') {
-                    adminList.innerHTML += `
-                        <div class="card">
-                            <strong>${room.name}</strong> (${room.type === 'private' ? '1:1 대화' : '단체방'})
-                            <br>신청자: ${room.requester} <button class="profile-btn" onclick="showProfile('${room.requester}')">프로필</button>
-                            <br><button class="btn btn-admin" style="width:auto; margin-top:5px; padding:5px 10px; font-size:0.8rem;" onclick="approveRoom('${room.id}')">개설 허가하기</button>
-                        </div>`;
-                }
-            });
-            if(!adminList.innerHTML) adminList.innerHTML = '<p style="color:#777;">대기 중인 개설 신청이 없습니다.</p>';
-
-            const monitorArea = document.getElementById('adminChatMonitorArea');
-            monitorArea.innerHTML = '';
-            rooms.forEach(room => {
-                monitorArea.innerHTML += `
-                    <div class="card" style="background:#f8f9fa;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <strong>📌 ${room.name} (${room.status})</strong>
-                            <button class="btn btn-ban" style="width:auto; padding:3px 8px; font-size:0.75rem;" onclick="deleteRoomByAdmin('${room.id}')">대화방 강제 삭제</button>
-                        </div>
-                        <div class="chat-box" style="height:120px;">
-                            ${(room.messages || []).length > 0 ? room.messages.map(m => `<div><strong>${m.sender}:</strong> ${m.text}</div>`).join('') : '<span style="color:#777;">대화 내역 없음</span>'}
-                        </div>
-                    </div>`;
-            });
-            if(!monitorArea.innerHTML) monitorArea.innerHTML = '<p style="color:#777;">생성된 대화방이 없습니다.</p>';
-
-            const bannedArea = document.getElementById('bannedUserListArea');
-            bannedArea.innerHTML = '';
-            for(let u in bannedDatabase) {
-                const b = bannedDatabase[u];
-                bannedArea.innerHTML += `
-                    <div class="card" style="background:#ffe3e3;">
-                        <strong>🚨 ${u}</strong> (${b.durationText} 정지)
-                        <br><small>사유: ${b.reason}</small>
-                        <br><button class="btn" style="width:auto; padding:3px 8px; font-size:0.75rem; background:#27ae60; margin-top:5px;" onclick="unbanUser('${u}')">정지 해제</button>
-                    </div>`;
+            if(isTaskRunning) {
+                taskAbortFlag = true;
             }
-            if(!bannedArea.innerHTML) bannedArea.innerHTML = '<p style="color:#777;">현재 정지된 회원이 없습니다.</p>';
-        }
-
-        function approveRoom(id) {
-            db.ref('rooms/' + id + '/status').set('승인됨');
-            alert("대화방 승인이 완료되었습니다.");
-        }
-
-        function deleteRoomByAdmin(id) {
-            if(confirm("이 대화방을 강제로 삭제하시겠습니까?")) {
-                db.ref('rooms/' + id).remove();
-                alert("대화방이 삭제되었습니다.");
-            }
-        }
-
-        function executeBanUser() {
-            const targetName = document.getElementById('banTargetSearchInput').value.trim();
-            if(!targetName) return alert('정지할 대상자의 이름을 입력해주세요.');
-
-            const durationDays = parseInt(document.getElementById('banDurationSelect').value);
-            const reason = document.getElementById('banReasonInput').value.trim() || '관리자 지침 위반';
-
-            const now = new Date().getTime();
-            const banUntil = now + (durationDays * 24 * 60 * 60 * 1000);
-            const durationText = durationDays >= 99999 ? '영구' : `${durationDays}일`;
-
-            // 정지 대상자의 deviceId를 찾기 위해 userDatabase 탐색
-            let targetDeviceId = "";
-            for(let u in userDatabase) {
-                if(u === targetName && userDatabase[u].deviceId) {
-                    targetDeviceId = userDatabase[u].deviceId;
-                    break;
-                }
-            }
-
-            db.ref('banned/' + targetName).set({
-                banUntil: banUntil,
-                durationText: durationText,
-                reason: reason,
-                deviceId: targetDeviceId || currentDeviceId
-            });
-
-            alert(`🚨 [${targetName}] 회원을 ${durationText} 정지 처리했습니다.`);
-            document.getElementById('banTargetSearchInput').value = '';
-            document.getElementById('banTargetSearchResult').innerText = '';
-        }
-
-        function unbanUser(username) {
-            db.ref('banned/' + username).remove();
-            alert(`[${username}] 회원의 정지를 해제했습니다.`);
-        }
-
-        function submitInquiry() {
-            const content = document.getElementById('inquiryContent').value.trim();
-            if(!content) return alert('내용을 입력해주세요.');
-
-            const inqId = 'inq_' + Date.now();
-            db.ref('inquiries/' + inqId).set({
-                id: inqId,
-                sender: currentUser.name,
-                content: content
-            });
-
-            alert('관리자(김유준)에게 문의 내역이 전송되었습니다.');
-            document.getElementById('inquiryContent').value = '';
-        }
-
-        function renderInquiries() {
-            const list = document.getElementById('inquiryList');
-            if(!list) return;
-            list.innerHTML = '';
-            inquiries.forEach(inq => {
-                list.innerHTML += `
-                    <div class="card">
-                        <strong>작성자: ${inq.sender}</strong> 
-                        <button class="profile-btn" onclick="showProfile('${inq.sender}')">프로필</button>
-                        <p style="margin-top:5px;">${inq.content}</p>
-                    </div>`;
-            });
-            if(!list.innerHTML) list.innerHTML = '<p style="color:#777;">접수된 문의가 없습니다.</p>';
         }
     </script>
 </body>
